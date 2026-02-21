@@ -1,0 +1,1 @@
+netstat -an -p tcp

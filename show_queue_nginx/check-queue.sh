@@ -1,0 +1,1 @@
+watch -n 1 'curl -s http://localhost:8080/nginx_status'
