@@ -1,10 +1,11 @@
+use rand::Rng;
 use std::arch::asm;
 use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
-const N: usize = 1024 * 1024; // 1M elements (must be multiple of 4)
-const ITERATIONS: usize = 100;
+const N: usize = 1024 * 1024 * 4; // 4M elements (camust be multiple of 4)
+const ITERATIONS: usize = 10;
 const NUM_TASKS: usize = 8;
 
 unsafe fn simd_add_chunk(a: &[f32], b: &[f32], result: &mut [f32]) {
@@ -134,15 +135,17 @@ fn bench<F: FnMut()>(label: &str, mut f: F) {
 
 #[tokio::main]
 async fn main() {
-    let a: Vec<f32> = (0..N).map(|i| i as f32).collect();
-    let b: Vec<f32> = (0..N).map(|i| (i * 2) as f32).collect();
+    let mut rng = rand::thread_rng();
+    let a: Vec<f32> = (0..N).map(|_| rng.r#gen::<f32>()).collect();
+    let b: Vec<f32> = (0..N).map(|_| rng.r#gen::<f32>()).collect();
     let mut result = vec![0.0f32; N];
 
     // Warmup
     unsafe { simd_add_chunk(&a, &b, &mut result) };
     scalar_add(&a, &b, &mut result);
 
-    println!("N={N}, iterations={ITERATIONS}, num_tasks={NUM_TASKS}\n");
+    let data_size = (N * ITERATIONS * std::mem::size_of::<f32>()) as f64 / 1e9;
+    println!("Data={data_size}gb, iterations={ITERATIONS}, num_tasks={NUM_TASKS}\n");
 
     bench("simd_add_chunk:", || unsafe {
         simd_add_chunk(&a, &b, &mut result)
