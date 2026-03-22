@@ -6,3 +6,8 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 rand = "0.8"
+
+[profile.release-unoptimized]
+inherits = "release"
+opt-level = 0
+  
