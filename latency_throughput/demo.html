@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Latency vs Throughput Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #0f1117;
+        color: #e0e0e0;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 16px;
+      }
+      h1 {
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: #a78bfa;
+        margin-bottom: 4px;
+      }
+      .subtitle {
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-bottom: 14px;
+      }
+
+      .controls {
+        background: #1a1d27;
+        border: 1px solid #2a2d3a;
+        border-radius: 10px;
+        padding: 14px 20px;
+        width: 960px;
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .ctrl-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 160px;
+      }
+      .ctrl-label {
+        font-size: 0.72rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .ctrl-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ctrl-row input[type="range"] {
+        flex: 1;
+        accent-color: #7c3aed;
+        cursor: pointer;
+      }
+      .ctrl-val {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #c4b5fd;
+        min-width: 32px;
+        text-align: right;
+      }
+      .btn {
+        background: #7c3aed;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn:hover {
+        background: #6d28d9;
+      }
+      .btn.danger {
+        background: #dc2626;
+      }
+      .btn.danger:hover {
+        background: #b91c1c;
+      }
+
+      canvas {
+        border-radius: 10px;
+        border: 1px solid #2a2d3a;
+        background: #13151f;
+        display: block;
+      }
+
+      .stats {
+        width: 960px;
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .stat-card {
+        background: #1a1d27;
+        border: 1px solid #2a2d3a;
+        border-radius: 8px;
+        padding: 10px 14px;
+      }
+      .stat-label {
+        font-size: 0.68rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+      }
+      .stat-value {
+        font-size: 1.3rem;
+        font-weight: 700;
+      }
+      .good {
+        color: #34d399;
+      }
+      .warn {
+        color: #fbbf24;
+      }
+      .bad {
+        color: #f87171;
+      }
+      .neutral {
+        color: #93c5fd;
+      }
+
+      .legend {
+        width: 960px;
+        display: flex;
+        gap: 18px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      .leg-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.73rem;
+        color: #9ca3af;
+      }
+      .leg-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .tip {
+        width: 960px;
+        margin-top: 10px;
+        background: #1a1d27;
+        border: 1px solid #2a2d3a;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 0.75rem;
+        color: #6b7280;
+        line-height: 1.6;
+      }
+      .tip strong {
+        color: #a78bfa;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Latency vs Throughput — Interactive Demo</h1>
+    <p class="subtitle">&nbsp;</p>
+
+    <div class="controls">
+      <div class="ctrl-group">
+        <div class="ctrl-label">Request Rate (req/s)</div>
+        <div class="ctrl-row">
+          <input type="range" id="reqRate" min="1" max="20" value="5" />
+          <span class="ctrl-val" id="reqRateVal">5</span>
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label">Processing Speed (req/s)</div>
+        <div class="ctrl-row">
+          <input
+            type="range"
+            id="procRate"
+            min="1"
+            max="20"
+            step="1"
+            value="4"
+          />
+          <span class="ctrl-val" id="procRateVal">4</span>
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label">Number of Processors</div>
+        <div class="ctrl-row">
+          <input type="range" id="numProc" min="1" max="8" value="2" />
+          <span class="ctrl-val" id="numProcVal">2</span>
+        </div>
+      </div>
+      <div
+        style="
+          display: flex;
+          gap: 8px;
+          align-items: flex-end;
+          padding-bottom: 2px;
+        "
+      >
+        <button class="btn" id="pauseBtn">Pause</button>
+        <button class="btn danger" id="resetBtn">Reset</button>
+      </div>
+    </div>
+
+    <canvas id="canvas" width="960" height="400"></canvas>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Throughput</div>
+        <div class="stat-value neutral" id="sThroughput">0.0</div>
+        <div class="stat-label">req/s</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Latency</div>
+        <div class="stat-value good" id="sAvgLat">—</div>
+        <div class="stat-label">ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">P50 Latency</div>
+        <div class="stat-value good" id="sP50">—</div>
+        <div class="stat-label">ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">P95 Latency</div>
+        <div class="stat-value good" id="sP95">—</div>
+        <div class="stat-label">ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Queue Depth</div>
+        <div class="stat-value good" id="sQueue">0</div>
+        <div class="stat-label">waiting</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Dropped</div>
+        <div class="stat-value neutral" id="sDropped">0</div>
+        <div class="stat-label">req (queue full)</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="leg-item">
+        <div class="leg-dot" style="background: #7c3aed"></div>
+        New request
+      </div>
+      <div class="leg-item">
+        <div class="leg-dot" style="background: #2563eb"></div>
+        Queued (short wait)
+      </div>
+      <div class="leg-item">
+        <div class="leg-dot" style="background: #f59e0b"></div>
+        Queued (long wait)
+      </div>
+      <div class="leg-item">
+        <div class="leg-dot" style="background: #dc2626"></div>
+        Queued (congested)
+      </div>
+      <div class="leg-item">
+        <div class="leg-dot" style="background: #10b981"></div>
+        Processing
+      </div>
+      <div class="leg-item">
+        <div class="leg-dot" style="background: #a78bfa"></div>
+        Completed
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width,
+        H = canvas.height;
+
+      // Layout constants
+      const SPAWNER_X = 50;
+      const QUEUE_X = 180;
+      const QUEUE_W = 140;
+      const PROC_START_X = 380;
+      const PROC_W = 220;
+      const EXIT_X = 920;
+      const BALL_R = 9;
+      const MAX_QUEUE = 60;
+      const QUEUE_VISIBLE_ROWS = 4;
+
+      // State
+      let config = { reqRate: 5, procRate: 4, numProc: 2 };
+      let paused = false;
+      let balls = [];
+      let processors = [];
+      let queue = [];
+      let completedHistory = []; // { completedAt, latency }
+      let droppedCount = 0;
+      let ballId = 0;
+      let lastSpawnTime = 0;
+      let lastFrameTime = 0;
+      let simTime = 0; // ms, simulation time
+
+      // Spawner animation
+      let spawnerPulse = 0;
+
+      // Color helpers
+      function ballColor(ball) {
+        if (ball.state === "spawning" || ball.state === "to_queue")
+          return "#7c3aed";
+        if (ball.state === "queued") {
+          const waitMs = simTime - ball.createdAt;
+          if (waitMs < 500) return "#2563eb";
+          if (waitMs < 1500) return "#f59e0b";
+          return "#dc2626";
+        }
+        if (ball.state === "to_proc") return "#10b981";
+        if (ball.state === "processing") return "#10b981";
+        if (ball.state === "completing") return "#a78bfa";
+        return "#6b7280";
+      }
+
+      function lerp(a, b, t) {
+        return a + (b - a) * Math.min(1, Math.max(0, t));
+      }
+
+      function initProcessors() {
+        processors = [];
+        const n = config.numProc;
+        const spacing = Math.min(60, (H - 80) / n);
+        const totalH = (n - 1) * spacing;
+        const startY = H / 2 - totalH / 2;
+        for (let i = 0; i < n; i++) {
+          processors.push({
+            index: i,
+            x: PROC_START_X + PROC_W / 2,
+            y: startY + i * spacing,
+            busy: false,
+            currentBall: null,
+          });
+        }
+      }
+
+      function reset() {
+        balls = [];
+        queue = [];
+        completedHistory = [];
+        droppedCount = 0;
+        ballId = 0;
+        lastSpawnTime = 0;
+        simTime = 0;
+        document.getElementById("sDropped").textContent = "0";
+        initProcessors();
+      }
+
+      // Spawn a new ball
+      function spawnBall() {
+        const ball = {
+          id: ballId++,
+          createdAt: simTime,
+          x: SPAWNER_X,
+          y: H / 2,
+          tx: QUEUE_X - 20,
+          ty: H / 2,
+          state: "spawning",
+          processorIndex: -1,
+          processStartAt: 0,
+          completedAt: 0,
+          vx: 0,
+          vy: 0,
+          queueIndex: -1,
+        };
+        balls.push(ball);
+      }
+
+      function getQueuePosition(idx) {
+        // Pack into rows of QUEUE_W / (BALL_R*2+4)
+        const cols = Math.floor(QUEUE_W / (BALL_R * 2 + 4));
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const x = QUEUE_X + BALL_R + col * (BALL_R * 2 + 4);
+        const y = H / 2 - 60 + row * (BALL_R * 2 + 4);
+        return { x, y };
+      }
+
+      function updateQueuePositions() {
+        queue.forEach((ball, i) => {
+          ball.queueIndex = i;
+          const pos = getQueuePosition(i);
+          ball.tx = pos.x;
+          ball.ty = pos.y;
+        });
+      }
+
+      function freeProcessor(procIdx) {
+        if (queue.length === 0) return;
+        const ball = queue.shift();
+        updateQueuePositions();
+        const proc = processors[procIdx];
+        proc.busy = true;
+        proc.currentBall = ball;
+        ball.state = "processing";
+        ball.x = proc.x;
+        ball.y = proc.y;
+        ball.tx = proc.x;
+        ball.ty = proc.y;
+        ball.processStartAt = simTime;
+      }
+
+      function update(dt) {
+        simTime += dt;
+        spawnerPulse = (spawnerPulse + dt * 0.004) % (Math.PI * 2);
+
+        // Spawn new balls
+        const spawnInterval = 1000 / config.reqRate;
+        while (simTime - lastSpawnTime >= spawnInterval) {
+          lastSpawnTime += spawnInterval;
+          spawnBall();
+        }
+
+        const processDuration = 1000 / config.procRate; // convert req/s to ms
+        const SPEED = 0.005; // fraction per ms
+
+        // Update each ball
+        for (let i = balls.length - 1; i >= 0; i--) {
+          const b = balls[i];
+          const dx = b.tx - b.x;
+          const dy = b.ty - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (
+            b.state === "spawning" ||
+            b.state === "to_queue" ||
+            b.state === "to_proc"
+          ) {
+            const speed = b.state === "to_proc" ? SPEED * 10 : SPEED;
+            const step = Math.max(0.8, dist * speed * dt);
+            if (dist < 1.5) {
+              b.x = b.tx;
+              b.y = b.ty;
+              if (b.state === "spawning") {
+                // Arrived near queue entry — push to queue
+                if (queue.length >= MAX_QUEUE) {
+                  // Drop ball
+                  droppedCount++;
+                  document.getElementById("sDropped").textContent =
+                    droppedCount;
+                  balls.splice(i, 1);
+                  continue;
+                }
+                b.state = "queued";
+                b.queueEnterAt = simTime;
+                queue.push(b);
+                updateQueuePositions();
+              } else if (b.state === "to_proc") {
+                b.state = "processing";
+                b.processStartAt = simTime; // start timer on arrival, not dispatch
+              }
+            } else {
+              b.x += (dx / dist) * step;
+              b.y += (dy / dist) * step;
+            }
+          } else if (b.state === "queued") {
+            // Smoothly move to queue position
+            const step = Math.max(0.5, dist * 0.004 * dt);
+            if (dist > 1) {
+              b.x += (dx / dist) * step;
+              b.y += (dy / dist) * step;
+            } else {
+              b.x = b.tx;
+              b.y = b.ty;
+            }
+          } else if (b.state === "processing") {
+            const proc = processors[b.processorIndex];
+            const elapsed = simTime - b.processStartAt;
+            if (elapsed >= processDuration) {
+              // Done processing
+              b.completedAt = simTime;
+              completedHistory.push({
+                completedAt: simTime,
+                latency: simTime - b.queueEnterAt,
+              });
+              if (completedHistory.length > 500) completedHistory.shift();
+              b.state = "completing";
+              b.tx = EXIT_X;
+              b.ty = b.y - 10;
+              if (proc) {
+                proc.busy = false;
+                proc.currentBall = null;
+              }
+              // Assign next ball from queue
+              if (proc) freeProcessor(b.processorIndex);
+            }
+          } else if (b.state === "completing") {
+            const step = Math.max(0.8, dist * SPEED * dt);
+            b.x += step;
+            b.y -= 0.3;
+            b.vx = step;
+            if (b.x > EXIT_X) {
+              balls.splice(i, 1);
+              continue;
+            }
+          }
+        }
+
+        // Assign queued balls to free processors
+        processors.forEach((proc, pi) => {
+          if (!proc.busy && queue.length > 0) {
+            freeProcessor(pi);
+          }
+          // Fix processorIndex on ball
+          if (proc.currentBall) proc.currentBall.processorIndex = pi;
+        });
+      }
+
+      function drawRoundRect(x, y, w, h, r, fill, stroke) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+        if (fill) {
+          ctx.fillStyle = fill;
+          ctx.fill();
+        }
+        if (stroke) {
+          ctx.strokeStyle = stroke;
+          ctx.stroke();
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+
+        // Background grid
+        ctx.strokeStyle = "#1e2130";
+        ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+        for (let y = 0; y < H; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(W, y);
+          ctx.stroke();
+        }
+
+        const n = config.numProc;
+
+        // --- Draw queue area ---
+        drawRoundRect(
+          QUEUE_X - 8,
+          30,
+          QUEUE_W + 16,
+          H - 60,
+          8,
+          "#181b28",
+          "#2a2d3a",
+        );
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "11px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("QUEUE", QUEUE_X + QUEUE_W / 2, 22);
+        ctx.fillStyle = "#374151";
+        ctx.font = "10px system-ui";
+        ctx.fillText(
+          `${queue.length} / ${MAX_QUEUE}`,
+          QUEUE_X + QUEUE_W / 2,
+          H - 20,
+        );
+
+        // Queue fill indicator
+        const fillFrac = queue.length / MAX_QUEUE;
+        const barH = H - 80;
+        const filledH = barH * fillFrac;
+        const fillColor =
+          fillFrac > 0.7 ? "#dc2626" : fillFrac > 0.4 ? "#f59e0b" : "#2563eb";
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(QUEUE_X - 8, 30 + barH - filledH, QUEUE_W + 16, filledH);
+        ctx.globalAlpha = 1;
+
+        // --- Draw processors ---
+        processors.forEach((proc, i) => {
+          const px = PROC_START_X,
+            py = proc.y - 22,
+            pw = PROC_W,
+            ph = 44;
+          const isBusy = proc.busy;
+
+          drawRoundRect(
+            px,
+            py,
+            pw,
+            ph,
+            8,
+            "#181b28",
+            isBusy ? "#10b981" : "#2a2d3a",
+          );
+
+          // Label
+          ctx.fillStyle = isBusy ? "#10b981" : "#4b5563";
+          ctx.font = "11px system-ui";
+          ctx.textAlign = "left";
+          ctx.fillText(`Processor ${i + 1}`, px + 10, py + 15);
+
+          // Progress bar
+          if (
+            isBusy &&
+            proc.currentBall &&
+            proc.currentBall.state === "processing"
+          ) {
+            const elapsed = simTime - proc.currentBall.processStartAt;
+            const frac = Math.min(1, elapsed / (1000 / config.procRate));
+            drawRoundRect(px + 10, py + 22, pw - 20, 12, 4, "#1e2130", null);
+            const barW = (pw - 20) * frac;
+            if (barW > 0) {
+              drawRoundRect(px + 10, py + 22, barW, 12, 4, "#10b981", null);
+            }
+          } else if (!isBusy) {
+            ctx.fillStyle = "#374151";
+            ctx.font = "10px system-ui";
+            ctx.textAlign = "left";
+            ctx.fillText("idle", px + 10, py + 34);
+          }
+
+          // Capacity label
+          ctx.fillStyle = "#4b5563";
+          ctx.font = "10px system-ui";
+          ctx.textAlign = "right";
+          ctx.fillText(`${config.procRate} r/s`, px + pw - 8, py + 15);
+        });
+
+        // --- Draw arrows: spawner → queue ---
+        ctx.strokeStyle = "#374151";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(SPAWNER_X + 18, H / 2);
+        ctx.lineTo(QUEUE_X - 10, H / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Arrow: queue → processors (fan out)
+        processors.forEach((proc) => {
+          ctx.strokeStyle = "#2a2d3a";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 5]);
+          ctx.beginPath();
+          ctx.moveTo(QUEUE_X + QUEUE_W + 8, H / 2);
+          ctx.bezierCurveTo(
+            QUEUE_X + QUEUE_W + 40,
+            H / 2,
+            PROC_START_X - 20,
+            proc.y,
+            PROC_START_X,
+            proc.y,
+          );
+          ctx.stroke();
+          ctx.setLineDash([]);
+        });
+
+        // Arrow: processors → exit
+        processors.forEach((proc) => {
+          ctx.strokeStyle = "#2a2d3a";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 5]);
+          ctx.beginPath();
+          ctx.moveTo(PROC_START_X + PROC_W, proc.y);
+          ctx.lineTo(PROC_START_X + PROC_W + 40, proc.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        });
+
+        // --- Spawner ---
+        const pulse = 0.5 + 0.5 * Math.sin(spawnerPulse);
+        ctx.beginPath();
+        ctx.arc(SPAWNER_X, H / 2, 16 + pulse * 4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(124,58,237,${0.15 + pulse * 0.15})`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(SPAWNER_X, H / 2, 14, 0, Math.PI * 2);
+        ctx.fillStyle = "#7c3aed";
+        ctx.fill();
+        ctx.fillStyle = "white";
+        ctx.font = "bold 10px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("SRC", SPAWNER_X, H / 2 + 4);
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "10px system-ui";
+        ctx.fillText(`${config.reqRate}/s`, SPAWNER_X, H / 2 + 28);
+
+        // Exit label
+        ctx.fillStyle = "#a78bfa";
+        ctx.font = "11px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("✓ DONE", PROC_START_X + PROC_W + 55, H / 2);
+
+        // --- Draw all balls ---
+        balls.forEach((b) => {
+          ctx.save();
+          // Shadow
+          ctx.shadowColor = ballColor(b);
+          ctx.shadowBlur = b.state === "completing" ? 12 : 6;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, BALL_R, 0, Math.PI * 2);
+          ctx.fillStyle = ballColor(b);
+          ctx.fill();
+          // Highlight
+          ctx.shadowBlur = 0;
+          ctx.beginPath();
+          ctx.arc(b.x - 2, b.y - 2, BALL_R * 0.4, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(255,255,255,0.3)";
+          ctx.fill();
+          ctx.restore();
+        });
+
+        // Labels
+        ctx.fillStyle = "#374151";
+        ctx.font = "11px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("Request Source", SPAWNER_X, H - 12);
+        ctx.fillText("Queue", QUEUE_X + QUEUE_W / 2, H - 12);
+        ctx.fillText("Processors", PROC_START_X + PROC_W / 2, H - 12);
+      }
+
+      function updateStats() {
+        const now = simTime;
+        const window5 = completedHistory.filter(
+          (c) => c.completedAt > now - 5000,
+        );
+        const throughput = window5.length / 5;
+
+        let avgLat = null,
+          p50 = null,
+          p95 = null;
+        if (window5.length > 0) {
+          const lats = window5.map((c) => c.latency).sort((a, b) => a - b);
+          avgLat = lats.reduce((s, v) => s + v, 0) / lats.length;
+          p50 = lats[Math.floor(lats.length * 0.5)];
+          p95 = lats[Math.floor(lats.length * 0.95)] || lats[lats.length - 1];
+        }
+
+        function colorClass(ms, good, warn) {
+          if (ms === null) return "neutral";
+          if (ms <= good) return "good";
+          if (ms <= warn) return "warn";
+          return "bad";
+        }
+
+        function setEl(id, val, cls) {
+          const el = document.getElementById(id);
+          el.textContent = val;
+          el.className = "stat-value " + cls;
+        }
+
+        setEl("sThroughput", throughput.toFixed(1), "neutral");
+        setEl(
+          "sAvgLat",
+          avgLat !== null ? Math.round(avgLat) : "—",
+          colorClass(avgLat, 500, 1500),
+        );
+        setEl(
+          "sP50",
+          p50 !== null ? Math.round(p50) : "—",
+          colorClass(p50, 400, 1200),
+        );
+        setEl(
+          "sP95",
+          p95 !== null ? Math.round(p95) : "—",
+          colorClass(p95, 800, 2500),
+        );
+
+        const qEl = document.getElementById("sQueue");
+        const ql = queue.length;
+        qEl.textContent = ql;
+        qEl.className =
+          "stat-value " + (ql < 5 ? "good" : ql < 20 ? "warn" : "bad");
+      }
+
+      let statsTimer = 0;
+      function loop(ts) {
+        if (!paused) {
+          const dt =
+            lastFrameTime === 0 ? 16 : Math.min(ts - lastFrameTime, 50);
+          lastFrameTime = ts;
+          update(dt);
+          statsTimer += dt;
+          if (statsTimer > 200) {
+            updateStats();
+            statsTimer = 0;
+          }
+        } else {
+          lastFrameTime = ts;
+        }
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      // Controls
+      function bindSlider(id, valId, key) {
+        const slider = document.getElementById(id);
+        const valEl = document.getElementById(valId);
+        slider.addEventListener("input", () => {
+          config[key] = parseInt(slider.value);
+          valEl.textContent = slider.value;
+          if (key === "numProc") {
+            // Re-init processors, keep balls but clear processor assignments
+            const oldProcs = processors;
+            initProcessors();
+            // Re-queue any balls that were being processed on now-removed processors
+            balls.forEach((b) => {
+              if (
+                (b.state === "processing" || b.state === "to_proc") &&
+                b.processorIndex >= processors.length
+              ) {
+                b.state = "to_queue";
+                b.tx = QUEUE_X - 20;
+                b.ty = H / 2;
+                b.processorIndex = -1;
+                queue.unshift(b);
+                updateQueuePositions();
+              }
+            });
+          }
+        });
+      }
+
+      bindSlider("reqRate", "reqRateVal", "reqRate");
+      bindSlider("procRate", "procRateVal", "procRate");
+      bindSlider("numProc", "numProcVal", "numProc");
+
+      document
+        .getElementById("pauseBtn")
+        .addEventListener("click", function () {
+          paused = !paused;
+          this.textContent = paused ? "Resume" : "Pause";
+        });
+
+      document.getElementById("resetBtn").addEventListener("click", reset);
+
+      // Init
+      initProcessors();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>

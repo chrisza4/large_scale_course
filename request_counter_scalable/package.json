@@ -1,0 +1,13 @@
+{
+  "name": "request_counter_scalable",
+  "module": "index.ts",
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "private": true,
+  "type": "module"
+}
