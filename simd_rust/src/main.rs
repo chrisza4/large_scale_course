@@ -17,22 +17,27 @@ fn scalar_add(a: &[f32], b: &[f32], result: &mut [f32]) {
 async fn async_parallel_add(
     a: Arc<Vec<f32>>,
     b: Arc<Vec<f32>>,
-    result: Arc<tokio::sync::Mutex<Vec<f32>>>,
+    result: Arc<Vec<f32>>,
 ) {
     let chunk_size = N / NUM_TASKS;
+    let a_ptr = a.as_ptr() as usize;
+    let b_ptr = b.as_ptr() as usize;
+    let r_ptr = result.as_ptr() as usize;
     let mut handles = Vec::with_capacity(NUM_TASKS);
 
     for t in 0..NUM_TASKS {
-        let a = Arc::clone(&a);
-        let b = Arc::clone(&b);
-        let result = Arc::clone(&result);
         let start = t * chunk_size;
         let end = start + chunk_size;
 
         handles.push(tokio::spawn(async move {
-            let partial: Vec<f32> = (start..end).map(|i| a[i] + b[i]).collect();
-            let mut res = result.lock().await;
-            res[start..end].copy_from_slice(&partial);
+            unsafe {
+                let a_chunk = std::slice::from_raw_parts((a_ptr + start * 4) as *const f32, end - start);
+                let b_chunk = std::slice::from_raw_parts((b_ptr + start * 4) as *const f32, end - start);
+                let r_chunk = std::slice::from_raw_parts_mut((r_ptr + start * 4) as *mut f32, end - start);
+                for i in 0..r_chunk.len() {
+                    r_chunk[i] = a_chunk[i] + b_chunk[i];
+                }
+            }
         }));
     }
 
@@ -59,6 +64,31 @@ unsafe fn simd_add_chunk(a: &[f32], b: &[f32], result: &mut [f32]) {
             );
         }
     }
+}
+
+fn thread_parallel_add(a: &[f32], b: &[f32], result: &mut [f32]) {
+    let chunk_size = a.len() / NUM_TASKS;
+    let a_ptr = a.as_ptr() as usize;
+    let b_ptr = b.as_ptr() as usize;
+    let r_ptr = result.as_mut_ptr() as usize;
+
+    thread::scope(|s| {
+        for t in 0..NUM_TASKS {
+            let start = t * chunk_size;
+            let end = start + chunk_size;
+            s.spawn(move || unsafe {
+                let a_chunk =
+                    std::slice::from_raw_parts((a_ptr + start * 4) as *const f32, end - start);
+                let b_chunk =
+                    std::slice::from_raw_parts((b_ptr + start * 4) as *const f32, end - start);
+                let r_chunk =
+                    std::slice::from_raw_parts_mut((r_ptr + start * 4) as *mut f32, end - start);
+                for i in 0..r_chunk.len() {
+                    r_chunk[i] = a_chunk[i] + b_chunk[i];
+                }
+            });
+        }
+    });
 }
 
 fn simd_parallel_add(a: &[f32], b: &[f32], result: &mut [f32]) {
@@ -113,7 +143,7 @@ async fn main() {
 
     let a = Arc::new(a);
     let b = Arc::new(b);
-    let async_result = Arc::new(tokio::sync::Mutex::new(vec![0.0f32; N]));
+    let async_result = Arc::new(vec![0.0f32; N]);
     let handle = tokio::runtime::Handle::current();
 
     bench("scalar_add:", || scalar_add(&a, &b, &mut result));
@@ -125,6 +155,9 @@ async fn main() {
                 Arc::clone(&async_result),
             ));
         });
+    });
+    bench("thread_parallel_add:", || {
+        thread_parallel_add(&a, &b, &mut result)
     });
     bench("simd_add_chunk:", || unsafe {
         simd_add_chunk(&a, &b, &mut result)
