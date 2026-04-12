@@ -56,6 +56,7 @@
         color: #9ca3af;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        min-height: 2.2em;
       }
       .ctrl-row {
         display: flex;
@@ -208,6 +209,13 @@
           <span class="ctrl-val" id="numProcVal">2</span>
         </div>
       </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label">Queue Size</div>
+        <div class="ctrl-row">
+          <input type="range" id="maxQueue" min="5" max="120" step="5" value="60" />
+          <span class="ctrl-val" id="maxQueueVal">60</span>
+        </div>
+      </div>
       <div
         style="
           display: flex;
@@ -297,11 +305,11 @@
       const PROC_W = 220;
       const EXIT_X = 920;
       const BALL_R = 9;
-      const MAX_QUEUE = 60;
       const QUEUE_VISIBLE_ROWS = 4;
 
       // State
-      let config = { reqRate: 5, procRate: 4, numProc: 2 };
+      let config = { reqRate: 5, procRate: 4, numProc: 2, maxQueue: 60 };
+      let MAX_QUEUE = config.maxQueue;
       let paused = false;
       let balls = [];
       let processors = [];
@@ -386,12 +394,19 @@
       }
 
       function getQueuePosition(idx) {
-        // Pack into rows of QUEUE_W / (BALL_R*2+4)
-        const cols = Math.floor(QUEUE_W / (BALL_R * 2 + 4));
+        const cellSize = BALL_R * 2 + 4;
+        const cols = Math.floor(QUEUE_W / cellSize);
+        const totalRows = Math.ceil(MAX_QUEUE / cols);
+        const totalGridH = totalRows * cellSize;
+        // Center vertically inside the queue box (y=30 to y=H-30, with label padding)
+        const queueInnerTop = 42;
+        const queueInnerBottom = H - 38;
+        const centerY = (queueInnerTop + queueInnerBottom) / 2;
+        const startY = centerY - totalGridH / 2 + BALL_R;
         const col = idx % cols;
         const row = Math.floor(idx / cols);
-        const x = QUEUE_X + BALL_R + col * (BALL_R * 2 + 4);
-        const y = H / 2 - 60 + row * (BALL_R * 2 + 4);
+        const x = QUEUE_X + BALL_R + col * cellSize;
+        const y = startY + row * cellSize;
         return { x, y };
       }
 
@@ -841,6 +856,22 @@
       bindSlider("reqRate", "reqRateVal", "reqRate");
       bindSlider("procRate", "procRateVal", "procRate");
       bindSlider("numProc", "numProcVal", "numProc");
+
+      // Queue size slider (special: also updates MAX_QUEUE and trims queue if needed)
+      const maxQueueSlider = document.getElementById("maxQueue");
+      const maxQueueVal = document.getElementById("maxQueueVal");
+      maxQueueSlider.addEventListener("input", () => {
+        config.maxQueue = parseInt(maxQueueSlider.value);
+        MAX_QUEUE = config.maxQueue;
+        maxQueueVal.textContent = maxQueueSlider.value;
+        // Drop balls that exceed the new limit
+        while (queue.length > MAX_QUEUE) {
+          queue.pop();
+          droppedCount++;
+          document.getElementById("sDropped").textContent = droppedCount;
+        }
+        updateQueuePositions();
+      });
 
       document
         .getElementById("pauseBtn")
