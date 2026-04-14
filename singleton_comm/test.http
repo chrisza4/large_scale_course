@@ -1,0 +1,28 @@
+### Single Instance Demo (both hit port 8080)
+
+# Step 1: Send a message to Instance A
+POST http://localhost:8080/send?message=hello
+
+###
+
+# Step 2: Receive from the same instance — works
+GET http://localhost:8080/receive
+
+###
+
+### Two Instance Demo (demonstrates the pitfall)
+# Start Instance A: mvn spring-boot:run
+# Start Instance B: SERVER_PORT=8081 mvn spring-boot:run
+
+# Step 3: Send to Instance A (port 8080)
+POST http://localhost:8080/send?message=hello
+
+###
+
+# Step 4: Receive from Instance B (port 8081) — returns "No message" (the pitfall)
+GET http://localhost:8081/receive
+
+###
+
+# Step 5: Receive from Instance A (port 8080) — still has it, trapped in A's heap
+GET http://localhost:8080/receive
