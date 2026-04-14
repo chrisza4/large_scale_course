@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class MessageStore {
 
-    private volatile String message;
+    private String message;
 
     public void store(String message) {
         this.message = message;

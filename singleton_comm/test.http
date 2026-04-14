@@ -1,7 +1,7 @@
 ### Single Instance Demo (both hit port 8080)
 
 # Step 1: Send a message to Instance A
-POST http://localhost:8080/send?message=hello
+POST http://localhost:8080/send?message=hxxllo
 
 ###
 
