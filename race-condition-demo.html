@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Race Condition — The Vanishing Money Problem</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0b0f1a;
+    --surface:   rgba(255,255,255,0.04);
+    --border:    rgba(255,255,255,0.08);
+    --cyan:      #00e5ff;
+    --magenta:   #ff00c8;
+    --green:     #00ff8c;
+    --red:       #ff3b5c;
+    --yellow:    #ffd23f;
+    --text:      #c8d6e5;
+    --muted:     #4a5568;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 4rem;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  header h1 {
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    font-weight: 700;
+    letter-spacing: .04em;
+    background: linear-gradient(135deg, var(--cyan), var(--magenta));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  header p {
+    margin-top: .5rem;
+    color: var(--muted);
+    font-size: .8rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  /* ── Two-panel layout ── */
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 1000px;
+  }
+  @media (max-width: 680px) {
+    .panels { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    backdrop-filter: blur(12px);
+  }
+  .panel-title {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    opacity: .5;
+  }
+  .panel-heading {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+  }
+  .panel.racy  .panel-heading { color: var(--red);   }
+  .panel.safe  .panel-heading { color: var(--green);  }
+
+  /* ── Balance display ── */
+  .balance-box {
+    background: rgba(0,0,0,.3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+  }
+  .balance-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .balance-value {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    transition: color .25s;
+  }
+  .balance-value.ok  { color: var(--green);   }
+  .balance-value.bad { color: var(--red);     }
+  .balance-value.neutral { color: var(--text); }
+  .balance-diff {
+    font-size: .75rem;
+    min-height: 1.1em;
+    transition: opacity .3s;
+  }
+  .balance-diff.hidden { opacity: 0; }
+  .balance-diff.loss   { color: var(--red);    }
+  .balance-diff.gain   { color: var(--green);  }
+
+  /* ── Thread visualizer ── */
+  .threads { display: flex; flex-direction: column; gap: .7rem; }
+  .thread-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+  }
+  .thread-tag {
+    font-size: .65rem;
+    font-weight: 700;
+    padding: .15rem .45rem;
+    border-radius: 4px;
+    letter-spacing: .08em;
+    flex-shrink: 0;
+    width: 3.8rem;
+    text-align: center;
+  }
+  .thread-row.a .thread-tag { background: rgba(0,229,255,.15); color: var(--cyan);    border: 1px solid var(--cyan);    }
+  .thread-row.b .thread-tag { background: rgba(255,0,200,.15); color: var(--magenta); border: 1px solid var(--magenta); }
+
+  .steps { display: flex; gap: .35rem; flex: 1; }
+  .step {
+    flex: 1;
+    padding: .3rem .2rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    text-align: center;
+    font-size: .6rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: rgba(0,0,0,.2);
+    transition: all .2s;
+    cursor: default;
+    user-select: none;
+  }
+  .step.active-a {
+    border-color: var(--cyan);
+    background: rgba(0,229,255,.12);
+    color: var(--cyan);
+    box-shadow: 0 0 8px rgba(0,229,255,.3);
+  }
+  .step.active-b {
+    border-color: var(--magenta);
+    background: rgba(255,0,200,.12);
+    color: var(--magenta);
+    box-shadow: 0 0 8px rgba(255,0,200,.3);
+  }
+  .step.done-a { border-color: rgba(0,229,255,.3); color: rgba(0,229,255,.5); background: rgba(0,229,255,.05); }
+  .step.done-b { border-color: rgba(255,0,200,.3); color: rgba(255,0,200,.5); background: rgba(255,0,200,.05); }
+  .step.conflict {
+    border-color: var(--red);
+    background: rgba(255,59,92,.15);
+    color: var(--red);
+    box-shadow: 0 0 10px rgba(255,59,92,.4);
+    animation: pulse-red .4s ease-in-out 3;
+  }
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 10px rgba(255,59,92,.4); }
+    50%      { box-shadow: 0 0 22px rgba(255,59,92,.8); }
+  }
+
+  /* ── Log ── */
+  .log {
+    background: rgba(0,0,0,.35);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .7rem .9rem;
+    font-size: .65rem;
+    line-height: 1.7;
+    min-height: 5.5rem;
+    max-height: 5.5rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .log .entry { display: flex; gap: .5rem; }
+  .log .ts  { color: var(--muted); flex-shrink: 0; }
+  .log .msg-a { color: var(--cyan);    }
+  .log .msg-b { color: var(--magenta); }
+  .log .msg-sys { color: var(--yellow); }
+  .log .msg-err { color: var(--red);    }
+  .log .msg-ok  { color: var(--green);  }
+
+  /* ── Stats ── */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .6rem;
+  }
+  .stat-box {
+    background: rgba(0,0,0,.25);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .6rem .8rem;
+  }
+  .stat-label { font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .stat-value { font-size: 1.1rem; font-weight: 700; margin-top: .15rem; }
+
+  /* ── Controls ── */
+  .controls {
+    width: 100%;
+    max-width: 1000px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: .6rem 1.6rem;
+    border-radius: 8px;
+    border: none;
+    font-family: inherit;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .2s;
+  }
+  .btn:active { transform: scale(.96); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-racy {
+    background: linear-gradient(135deg, #ff3b5c, #ff00c8);
+    color: #fff;
+    box-shadow: 0 0 16px rgba(255,59,92,.35);
+  }
+  .btn-racy:hover:not(:disabled) { box-shadow: 0 0 24px rgba(255,59,92,.6); }
+
+  .btn-safe {
+    background: linear-gradient(135deg, #00ff8c, #00e5ff);
+    color: #0b0f1a;
+    box-shadow: 0 0 16px rgba(0,255,140,.25);
+  }
+  .btn-safe:hover:not(:disabled) { box-shadow: 0 0 24px rgba(0,255,140,.5); }
+
+  .btn-reset {
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn-reset:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+
+  .speed-wrap {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .65rem;
+    color: var(--muted);
+  }
+  .speed-wrap input[type=range] {
+    width: 80px;
+    accent-color: var(--cyan);
+  }
+
+  /* ── Explainer ── */
+  .explainer {
+    width: 100%;
+    max-width: 1000px;
+    margin-top: 2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 680px) {
+    .explainer { grid-template-columns: 1fr; }
+  }
+  .explainer h2 {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-bottom: .8rem;
+  }
+  .code-block {
+    background: rgba(0,0,0,.4);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .9rem 1rem;
+    font-size: .68rem;
+    line-height: 1.8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .kw   { color: var(--magenta); }
+  .fn   { color: var(--cyan);    }
+  .cm   { color: var(--muted);   }
+  .hl   { color: var(--red);     font-weight: bold; }
+  .hlg  { color: var(--green);   font-weight: bold; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Race Condition</h1>
+  <p>The Vanishing Money Problem — Concurrent Shared State</p>
+</header>
+
+<div class="panels">
+
+  <!-- RACY PANEL -->
+  <div class="panel racy">
+    <div>
+      <div class="panel-title">Mode 01</div>
+      <div class="panel-heading">No Lock — Racy</div>
+    </div>
+
+    <div class="balance-box">
+      <div class="balance-label">Account Balance</div>
+      <div class="balance-value neutral" id="racy-balance">$1,000</div>
+      <div class="balance-diff hidden" id="racy-diff"></div>
+    </div>
+
+    <div class="threads">
+      <div class="thread-row a">
+        <div class="thread-tag">Thread A</div>
+        <div class="steps">
+          <div class="step" id="ra-read">Read</div>
+          <div class="step" id="ra-compute">Compute</div>
+          <div class="step" id="ra-write">Write</div>
+        </div>
+      </div>
+      <div class="thread-row b">
+        <div class="thread-tag">Thread B</div>
+        <div class="steps">
+          <div class="step" id="rb-read">Read</div>
+          <div class="step" id="rb-compute">Compute</div>
+          <div class="step" id="rb-write">Write</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-label">Transfers Done</div>
+        <div class="stat-value" id="racy-count">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Money Lost</div>
+        <div class="stat-value" style="color:var(--red)" id="racy-lost">$0</div>
+      </div>
+    </div>
+
+    <div class="log" id="racy-log"></div>
+  </div>
+
+  <!-- SAFE PANEL -->
+  <div class="panel safe">
+    <div>
+      <div class="panel-title">Mode 02</div>
+      <div class="panel-heading">Mutex Lock — Safe</div>
+    </div>
+
+    <div class="balance-box">
+      <div class="balance-label">Account Balance</div>
+      <div class="balance-value neutral" id="safe-balance">$1,000</div>
+      <div class="balance-diff hidden" id="safe-diff"></div>
+    </div>
+
+    <div class="threads">
+      <div class="thread-row a">
+        <div class="thread-tag">Thread A</div>
+        <div class="steps">
+          <div class="step" id="sa-lock">Lock</div>
+          <div class="step" id="sa-read">Read</div>
+          <div class="step" id="sa-compute">Compute</div>
+          <div class="step" id="sa-write">Write</div>
+          <div class="step" id="sa-unlock">Unlock</div>
+        </div>
+      </div>
+      <div class="thread-row b">
+        <div class="thread-tag">Thread B</div>
+        <div class="steps">
+          <div class="step" id="sb-lock">Lock</div>
+          <div class="step" id="sb-read">Read</div>
+          <div class="step" id="sb-compute">Compute</div>
+          <div class="step" id="sb-write">Write</div>
+          <div class="step" id="sb-unlock">Unlock</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-label">Transfers Done</div>
+        <div class="stat-value" id="safe-count">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Money Lost</div>
+        <div class="stat-value" style="color:var(--green)" id="safe-lost">$0</div>
+      </div>
+    </div>
+
+    <div class="log" id="safe-log"></div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="btn btn-racy" id="btn-racy" onclick="runRacy()">Run Race</button>
+  <button class="btn btn-safe" id="btn-safe" onclick="runSafe()">Run Safe</button>
+  <button class="btn btn-reset" onclick="resetAll()">Reset</button>
+  <div class="speed-wrap">
+    <span>Speed</span>
+    <input type="range" id="speed" min="1" max="5" value="3">
+    <span id="speed-label">3×</span>
+  </div>
+</div>
+
+<!-- Explainer -->
+<div class="explainer">
+  <div>
+    <h2 style="color:var(--red)">The Bug — Read-Modify-Write</h2>
+    <div class="code-block"><span class="cm">// Both threads run this at the same time</span>
+<span class="kw">async function</span> <span class="fn">transfer</span>(amount) {
+  <span class="cm">// 1. Both threads READ the same stale value</span>
+  <span class="hl">const bal = account.balance;  // e.g. 1000</span>
+
+  <span class="cm">// 2. Compute independently — no awareness of each other</span>
+  <span class="kw">await</span> sleep(delay);
+  <span class="hl">const next = bal - amount;    // both compute 900</span>
+
+  <span class="cm">// 3. Both WRITE — second clobbers first!</span>
+  <span class="hl">account.balance = next;       // 900 (not 800!)</span>
+  <span class="cm">// One transfer effectively never happened</span>
+}</div>
+  </div>
+  <div>
+    <h2 style="color:var(--green)">The Fix — Mutual Exclusion</h2>
+    <div class="code-block"><span class="cm">// A simple promise-based mutex</span>
+<span class="kw">class</span> <span class="fn">Mutex</span> {
+  <span class="fn">acquire</span>() { <span class="cm">/* waits for lock */</span> }
+  <span class="fn">release</span>() { <span class="cm">/* wakes next waiter */</span> }
+}
+
+<span class="kw">async function</span> <span class="fn">transfer</span>(amount) {
+  <span class="hlg">await mutex.acquire();   // only one thread proceeds</span>
+
+  <span class="cm">// Now safe — single thread in critical section</span>
+  <span class="hlg">const bal = account.balance;</span>
+  <span class="kw">await</span> sleep(delay);
+  <span class="hlg">account.balance = bal - amount;</span>
+
+  <span class="hlg">mutex.release();         // next thread can enter</span>
+}</div>
+  </div>
+</div>
+
+<script>
+// ── Mutex ──────────────────────────────────────────────
+class Mutex {
+  constructor() { this._queue = []; this._locked = false; }
+  acquire() {
+    return new Promise(res => {
+      if (!this._locked) { this._locked = true; res(); }
+      else this._queue.push(res);
+    });
+  }
+  release() {
+    if (this._queue.length) { this._queue.shift()(); }
+    else this._locked = false;
+  }
+  get locked() { return this._locked; }
+}
+
+// ── State ──────────────────────────────────────────────
+const INITIAL = 1000;
+const TRANSFER = 100;
+const ROUNDS = 5;
+
+const state = {
+  racy: { balance: INITIAL, expected: INITIAL, count: 0, lost: 0 },
+  safe: { balance: INITIAL, expected: INITIAL, count: 0, lost: 0 },
+};
+const safeMutex = new Mutex();
+let running = false;
+
+// ── Speed ──────────────────────────────────────────────
+const speedEl = document.getElementById('speed');
+const speedLabel = document.getElementById('speed-label');
+speedEl.addEventListener('input', () => { speedLabel.textContent = speedEl.value + '×'; });
+function getDelay(base) {
+  const factor = 6 - parseInt(speedEl.value); // 1→5x, 5→1x
+  return base * factor;
+}
+
+// ── Helpers ────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt = n => '$' + n.toLocaleString();
+
+function setStep(id, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'step ' + cls;
+}
+function clearSteps(prefix) {
+  const ids = prefix === 'r'
+    ? ['ra-read','ra-compute','ra-write','rb-read','rb-compute','rb-write']
+    : ['sa-lock','sa-read','sa-compute','sa-write','sa-unlock',
+       'sb-lock','sb-read','sb-compute','sb-write','sb-unlock'];
+  ids.forEach(id => setStep(id, ''));
+}
+
+function logEntry(logId, thread, msg, type) {
+  const log = document.getElementById(logId);
+  const row = document.createElement('div');
+  row.className = 'entry';
+  const ts = document.createElement('span');
+  ts.className = 'ts';
+  ts.textContent = new Date().toISOString().slice(14,23);
+  const m = document.createElement('span');
+  m.className = 'msg-' + (type || 'sys');
+  m.textContent = (thread ? '[' + thread + '] ' : '') + msg;
+  row.appendChild(ts); row.appendChild(m);
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+function updateBalance(side, value, expected) {
+  const el = document.getElementById(side + '-balance');
+  const diff = document.getElementById(side + '-diff');
+  el.textContent = fmt(value);
+  const loss = expected - value;
+  if (loss > 0) {
+    el.className = 'balance-value bad';
+    diff.textContent = '▼ ' + fmt(loss) + ' lost to race condition';
+    diff.className = 'balance-diff loss';
+  } else if (loss < 0) {
+    el.className = 'balance-value bad';
+    diff.textContent = '▲ Unexpected gain (also a bug!)';
+    diff.className = 'balance-diff gain';
+  } else if (value < INITIAL) {
+    el.className = 'balance-value ok';
+    diff.textContent = '✓ Matches expected value';
+    diff.className = 'balance-diff gain';
+  } else {
+    el.className = 'balance-value neutral';
+    diff.className = 'balance-diff hidden';
+    diff.textContent = '';
+  }
+  document.getElementById(side + '-count').textContent = state[side].count;
+  const lostEl = document.getElementById(side + '-lost');
+  lostEl.textContent = fmt(state[side].lost);
+}
+
+// ── Racy Transfer ──────────────────────────────────────
+async function racyTransfer(thread, label) {
+  const prefix = thread === 'a' ? 'ra' : 'rb';
+  const cls = 'active-' + thread;
+  const done = 'done-' + thread;
+
+  // READ
+  setStep(prefix + '-read', cls);
+  const readVal = state.racy.balance;
+  logEntry('racy-log', label, 'READ balance = ' + fmt(readVal), thread);
+  await sleep(getDelay(180));
+  setStep(prefix + '-read', done);
+
+  // COMPUTE (this is where interleaving happens)
+  setStep(prefix + '-compute', cls);
+  const newVal = readVal - TRANSFER;
+  logEntry('racy-log', label, 'COMPUTE new = ' + fmt(newVal), thread);
+  await sleep(getDelay(250));
+  setStep(prefix + '-compute', done);
+
+  // WRITE
+  setStep(prefix + '-write', cls);
+  const prevActual = state.racy.balance;
+  state.racy.balance = newVal;
+  state.racy.expected -= TRANSFER;
+  state.racy.count++;
+
+  const lost = state.racy.expected - state.racy.balance;
+  if (lost > 0) {
+    // Conflict detected
+    setStep(prefix + '-write', 'conflict');
+    state.racy.lost += TRANSFER;
+    logEntry('racy-log', label,
+      'WRITE ' + fmt(newVal) + ' — CLOBBERED! (was ' + fmt(prevActual) + ', lost ' + fmt(TRANSFER) + ')',
+      'err');
+    await sleep(getDelay(120));
+  } else {
+    logEntry('racy-log', label, 'WRITE ' + fmt(newVal), thread);
+    await sleep(getDelay(120));
+    setStep(prefix + '-write', done);
+  }
+  updateBalance('racy', state.racy.balance, state.racy.expected);
+}
+
+// ── Safe Transfer ──────────────────────────────────────
+async function safeTransfer(thread, label) {
+  const prefix = thread === 'a' ? 'sa' : 'sb';
+  const cls = 'active-' + thread;
+  const done = 'done-' + thread;
+
+  // LOCK
+  setStep(prefix + '-lock', cls);
+  const wasLocked = safeMutex.locked;
+  if (wasLocked) logEntry('safe-log', label, 'Waiting for lock…', thread);
+  await safeMutex.acquire();
+  logEntry('safe-log', label, 'Lock acquired', thread);
+  setStep(prefix + '-lock', done);
+
+  // READ
+  setStep(prefix + '-read', cls);
+  const readVal = state.safe.balance;
+  logEntry('safe-log', label, 'READ balance = ' + fmt(readVal), thread);
+  await sleep(getDelay(180));
+  setStep(prefix + '-read', done);
+
+  // COMPUTE
+  setStep(prefix + '-compute', cls);
+  const newVal = readVal - TRANSFER;
+  logEntry('safe-log', label, 'COMPUTE new = ' + fmt(newVal), thread);
+  await sleep(getDelay(250));
+  setStep(prefix + '-compute', done);
+
+  // WRITE
+  setStep(prefix + '-write', cls);
+  state.safe.balance = newVal;
+  state.safe.expected -= TRANSFER;
+  state.safe.count++;
+  logEntry('safe-log', label, 'WRITE ' + fmt(newVal), thread);
+  await sleep(getDelay(100));
+  setStep(prefix + '-write', done);
+
+  // UNLOCK
+  setStep(prefix + '-unlock', cls);
+  safeMutex.release();
+  logEntry('safe-log', label, 'Lock released', thread);
+  await sleep(getDelay(80));
+  setStep(prefix + '-unlock', done);
+
+  updateBalance('safe', state.safe.balance, state.safe.expected);
+}
+
+// ── Run Scenarios ──────────────────────────────────────
+async function runRacy() {
+  if (running) return;
+  running = true;
+  setBtns(true);
+  clearSteps('r');
+  document.getElementById('racy-log').innerHTML = '';
+  logEntry('racy-log', null, 'Starting ' + ROUNDS + ' concurrent transfer pairs…', 'sys');
+
+  for (let i = 0; i < ROUNDS; i++) {
+    await sleep(getDelay(60));
+    // Launch both threads concurrently — no await between them!
+    await Promise.all([
+      racyTransfer('a', 'Thread-A'),
+      racyTransfer('b', 'Thread-B'),
+    ]);
+    await sleep(getDelay(80));
+    clearSteps('r');
+  }
+  const lost = state.racy.lost;
+  if (lost > 0) {
+    logEntry('racy-log', null,
+      'Done. ' + fmt(lost) + ' vanished due to race conditions!', 'err');
+  } else {
+    logEntry('racy-log', null, 'Done. (Got lucky this time — try again!)', 'sys');
+  }
+  running = false;
+  setBtns(false);
+}
+
+async function runSafe() {
+  if (running) return;
+  running = true;
+  setBtns(true);
+  clearSteps('s');
+  document.getElementById('safe-log').innerHTML = '';
+  logEntry('safe-log', null, 'Starting ' + ROUNDS + ' concurrent transfer pairs…', 'sys');
+
+  for (let i = 0; i < ROUNDS; i++) {
+    await sleep(getDelay(60));
+    await Promise.all([
+      safeTransfer('a', 'Thread-A'),
+      safeTransfer('b', 'Thread-B'),
+    ]);
+    await sleep(getDelay(80));
+    clearSteps('s');
+  }
+  logEntry('safe-log', null,
+    'Done. Balance is exactly ' + fmt(state.safe.balance) + ' — no money lost.', 'ok');
+  running = false;
+  setBtns(false);
+}
+
+function resetAll() {
+  if (running) return;
+  state.racy = { balance: INITIAL, expected: INITIAL, count: 0, lost: 0 };
+  state.safe  = { balance: INITIAL, expected: INITIAL, count: 0, lost: 0 };
+
+  // Reset visuals
+  ['racy','safe'].forEach(s => {
+    const b = document.getElementById(s + '-balance');
+    b.textContent = fmt(INITIAL);
+    b.className = 'balance-value neutral';
+    const d = document.getElementById(s + '-diff');
+    d.className = 'balance-diff hidden';
+    d.textContent = '';
+    document.getElementById(s + '-count').textContent = '0';
+    document.getElementById(s + '-lost').textContent = '$0';
+    document.getElementById(s + '-log').innerHTML = '';
+  });
+  clearSteps('r'); clearSteps('s');
+
+  // Re-create mutex
+  Object.assign(safeMutex, new Mutex());
+  safeMutex._queue = []; safeMutex._locked = false;
+}
+
+function setBtns(disabled) {
+  ['btn-racy','btn-safe'].forEach(id => {
+    document.getElementById(id).disabled = disabled;
+  });
+}
+</script>
+</body>
+</html>
