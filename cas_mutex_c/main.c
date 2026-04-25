@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <pthread.h>
 
 static bool compare_and_swap(int64_t *ptr, int64_t expected, int64_t desired) {
@@ -20,30 +22,23 @@ static bool compare_and_swap(int64_t *ptr, int64_t expected, int64_t desired) {
 // Mutex built on CAS
 // ---------------------------------------------------------------------------
 
-typedef struct { int64_t state; } cas_mutex_t;
-
-#define CAS_MUTEX_INIT { .state = 0 }
-
-static void cas_mutex_lock(cas_mutex_t *m) {
-    // Spin until we win the CAS: 0 → 1
-    while (!compare_and_swap(&m->state, 0, 1))
-        ; // busy-wait
+static void cas_mutex_lock(int64_t *m) {
+    while (!compare_and_swap(m, 0, 1))
+        ;
 }
 
-static void cas_mutex_unlock(cas_mutex_t *m) {
-    // Release: 1 → 0
-    m->state = 0;
-    // or, compare_and_swap(&m->state, 1, 0), but this will break if current state is not lock
+static void cas_mutex_unlock(int64_t *m) {
+    *m = 0;
 }
 
 // ---------------------------------------------------------------------------
 // Demo: two threads racing to increment a shared counter
 // ---------------------------------------------------------------------------
 
-#define ITERATIONS 5000000
+#define ITERATIONS 100000
 
-static cas_mutex_t g_mutex = CAS_MUTEX_INIT;
-static int64_t     g_counter = 0;
+static volatile int64_t g_mutex   = 0;
+static volatile int64_t g_counter = 0;
 
 static void *worker(void *arg) {
     int use_mutex = (int)(intptr_t)arg;
@@ -69,7 +64,7 @@ static void demo_cas(void) {
 
 static void run_threads(int use_mutex) {
     g_counter = 0;
-    g_mutex = (cas_mutex_t)CAS_MUTEX_INIT;
+    g_mutex   = 0;
     pthread_t t1, t2;
     pthread_create(&t1, NULL, worker, (void *)(intptr_t)use_mutex);
     pthread_create(&t2, NULL, worker, (void *)(intptr_t)use_mutex);
