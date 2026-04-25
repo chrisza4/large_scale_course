@@ -40,17 +40,17 @@ static void cas_mutex_unlock(cas_mutex_t *m) {
 // Demo: two threads racing to increment a shared counter
 // ---------------------------------------------------------------------------
 
-#define ITERATIONS 100000
+#define ITERATIONS 5000000
 
 static cas_mutex_t g_mutex = CAS_MUTEX_INIT;
 static int64_t     g_counter = 0;
 
 static void *worker(void *arg) {
-    (void)arg;
+    int use_mutex = (int)(intptr_t)arg;
     for (int i = 0; i < ITERATIONS; i++) {
-        cas_mutex_lock(&g_mutex);
+        if (use_mutex) cas_mutex_lock(&g_mutex);
         g_counter++;
-        cas_mutex_unlock(&g_mutex);
+        if (use_mutex) cas_mutex_unlock(&g_mutex);
     }
     return NULL;
 }
@@ -67,21 +67,28 @@ static void demo_cas(void) {
            ok ? "✓ swapped" : "✗ failed", (long long)value);
 }
 
-static void demo_mutex(void) {
-    printf("=== Mutex Demo ===\n");
+static void run_threads(int use_mutex) {
     g_counter = 0;
     g_mutex = (cas_mutex_t)CAS_MUTEX_INIT;
-
     pthread_t t1, t2;
-    pthread_create(&t1, NULL, worker, NULL);
-    pthread_create(&t2, NULL, worker, NULL);
+    pthread_create(&t1, NULL, worker, (void *)(intptr_t)use_mutex);
+    pthread_create(&t2, NULL, worker, (void *)(intptr_t)use_mutex);
     pthread_join(t1, NULL);
     pthread_join(t2, NULL);
+}
 
-    printf("Two threads × %d increments each\n", ITERATIONS);
-    printf("Expected: %d | Got: %lld | %s\n",
-           2 * ITERATIONS,
-           (long long)g_counter,
+static void demo_mutex(void) {
+    printf("=== Mutex Demo ===\n");
+    printf("Two threads × %d increments each\n\n", ITERATIONS);
+
+    run_threads(0);
+    printf("Without mutex — Expected: %d | Got: %lld | %s\n",
+           2 * ITERATIONS, (long long)g_counter,
+           g_counter == 2 * ITERATIONS ? "✓ correct" : "✗ race detected");
+
+    run_threads(1);
+    printf("With mutex    — Expected: %d | Got: %lld | %s\n",
+           2 * ITERATIONS, (long long)g_counter,
            g_counter == 2 * ITERATIONS ? "✓ correct" : "✗ race detected");
 }
 
