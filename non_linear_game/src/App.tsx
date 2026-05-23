@@ -7,7 +7,8 @@ export function App() {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://${location.host}/ws`);
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
     wsRef.current = ws;
     ws.onmessage = (e) => setCurrentValue(e.data);
     return () => ws.close();

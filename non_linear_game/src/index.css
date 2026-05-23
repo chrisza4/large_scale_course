@@ -1,9 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@500&display=swap');
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   line-height: 1.5;
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: light;
 }
 
 body {
@@ -12,6 +12,10 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #f5f0e8;
+  background-image:
+    radial-gradient(circle at 20% 20%, #ffe0b2 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, #c8e6c9 0%, transparent 50%);
 }
 
 .game {
@@ -19,63 +23,98 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 2rem;
-  padding: 2rem;
+  padding: 3rem 3rem;
+  background: #fffdf7;
+  border-radius: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 40px rgba(0,0,0,0.08);
+  border: 1px solid #ede8df;
+  min-width: 300px;
 }
 
 .game-title {
-  font-size: 2rem;
+  font-size: 1.1rem;
+  font-weight: 500;
   margin: 0;
-  color: #fbf0df;
+  color: #9e8f7a;
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .current-value {
+  font-family: 'DM Mono', monospace;
   font-size: 6rem;
-  font-weight: 700;
-  color: #fbf0df;
+  font-weight: 500;
   min-width: 4ch;
   text-align: center;
   line-height: 1;
+  color: #2d2417;
+  transition: transform 0.15s cubic-bezier(.34,1.56,.64,1);
+}
+
+.current-value:not(:empty) {
+  animation: pop 0.2s cubic-bezier(.34,1.56,.64,1);
+}
+
+@keyframes pop {
+  from { transform: scale(0.88); opacity: 0.6; }
+  to   { transform: scale(1); opacity: 1; }
 }
 
 .input-row {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.6rem;
   align-items: center;
 }
 
 .number-input {
-  background: #1a1a1a;
-  border: 2px solid #fbf0df;
-  border-radius: 10px;
-  color: #fbf0df;
-  font-size: 1.2rem;
-  padding: 0.5rem 1rem;
+  background: #f5f0e8;
+  border: 1.5px solid #ddd5c8;
+  border-radius: 12px;
+  color: #2d2417;
+  font-family: 'DM Mono', monospace;
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.65rem 1rem;
   outline: none;
-  width: 200px;
+  width: 160px;
   text-align: center;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.number-input::placeholder {
+  color: #b5a898;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
 }
 
 .number-input:focus {
-  border-color: #f3d5a3;
+  border-color: #e07b39;
+  box-shadow: 0 0 0 3px rgba(224, 123, 57, 0.12);
 }
 
 .ok-button {
-  background: #fbf0df;
-  color: #1a1a1a;
+  background: #2d2417;
+  color: #fffdf7;
   border: none;
-  border-radius: 10px;
-  font-size: 1.2rem;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 0.95rem;
   font-weight: 700;
-  padding: 0.5rem 1.5rem;
+  padding: 0.65rem 1.4rem;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, transform 0.12s;
+  letter-spacing: 0.5px;
 }
 
 .ok-button:hover {
-  background: #f3d5a3;
+  background: #e07b39;
   transform: translateY(-1px);
 }
 
+.ok-button:active {
+  transform: scale(0.97);
+}
+
 @media (prefers-reduced-motion) {
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
 }
