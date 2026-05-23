@@ -20,17 +20,18 @@ const server = serve({
         return Response.json({ value: currentValue });
       },
     },
-    ...(!isProd ? { "/": index } : {}),
+    ...(!isProd ? { "/": index } : ({} as Record<"/", never>)),
   },
 
   async fetch(req) {
-    if (isProd) {
-      const { pathname } = new URL(req.url);
-      const path = pathname === "/" ? "/index.html" : pathname;
-      const file = Bun.file(`./dist${path}`);
-      const exists = await file.exists();
-      return new Response(exists ? file : Bun.file("./dist/index.html"));
+    if (!isProd) {
+      return new Response("Not Found", { status: 404 });
     }
+    const { pathname } = new URL(req.url);
+    const path = pathname === "/" ? "/index.html" : pathname;
+    const file = Bun.file(`./dist${path}`);
+    const exists = await file.exists();
+    return new Response(exists ? file : Bun.file("./dist/index.html"));
   },
 
   development: !isProd && { hmr: true, console: true },
