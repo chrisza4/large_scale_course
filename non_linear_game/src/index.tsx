@@ -1,41 +1,43 @@
-import { serve } from "bun";
+import { serve, type ServerWebSocket } from "bun";
 import index from "./index.html";
+
+let currentValue = 0;
+const clients = new Set<ServerWebSocket<unknown>>();
 
 const server = serve({
   routes: {
-    // Serve index.html for all unmatched routes.
     "/*": index,
+  },
 
-    "/api/hello": {
-      async GET(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "GET",
-        });
-      },
-      async PUT(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "PUT",
-        });
-      },
+  websocket: {
+    open(ws) {
+      clients.add(ws);
+      ws.send(String(currentValue));
     },
-
-    "/api/hello/:name": async req => {
-      const name = req.params.name;
-      return Response.json({
-        message: `Hello, ${name}!`,
-      });
+    message(_ws, msg) {
+      const num = Number(msg);
+      if (!Number.isFinite(num)) return;
+      currentValue = num;
+      for (const client of clients) {
+        client.send(String(currentValue));
+      }
+    },
+    close(ws) {
+      clients.delete(ws);
     },
   },
 
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
+  fetch(req, server) {
+    if (new URL(req.url).pathname === "/ws") {
+      if (server.upgrade(req)) return undefined as any;
+      return new Response("WebSocket upgrade failed", { status: 400 });
+    }
+  },
 
-    // Echo console logs from the browser to the server
+  development: process.env.NODE_ENV !== "production" && {
+    hmr: true,
     console: true,
   },
 });
 
-console.log(`🚀 Server running at ${server.url}`);
+console.log(`Server running at ${server.url}`);
