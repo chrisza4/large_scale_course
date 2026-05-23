@@ -1,23 +1,32 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import "./index.css";
 
 export function App() {
   const [currentValue, setCurrentValue] = useState<string>("—");
   const [inputValue, setInputValue] = useState("");
-  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/ws`);
-    wsRef.current = ws;
-    ws.onmessage = (e) => setCurrentValue(e.data);
-    return () => ws.close();
+    const poll = async () => {
+      const res = await fetch("/api/value");
+      const data = (await res.json()) as { value: number };
+      setCurrentValue(String(data.value));
+    };
+
+    poll();
+    const id = setInterval(poll, 200);
+    return () => clearInterval(id);
   }, []);
 
-  function send() {
+  async function send() {
     const num = Number(inputValue);
     if (!Number.isFinite(num) || inputValue.trim() === "") return;
-    wsRef.current?.send(inputValue.trim());
+    const res = await fetch("/api/value", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: num }),
+    });
+    const data = (await res.json()) as { value: number };
+    setCurrentValue(String(data.value));
     setInputValue("");
   }
 
