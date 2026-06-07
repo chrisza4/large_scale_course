@@ -30,7 +30,7 @@ const server = Bun.serve({
 
         const entry = getEntry(key);
 
-        // Important: Idempotency check must be atomic
+        // Important: Idempotency check must be atomic. It is really hard to tell Claude Code about this
         // Excersise for reader: Can you implement this as distributed lock in Redis?
         return entry.mutex.runExclusive(async () => {
           if (entry.value !== undefined) {
