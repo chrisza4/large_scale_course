@@ -1,0 +1,6 @@
+@idempotence2_HostAddress = http://localhost:5105
+
+GET {{idempotence2_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
