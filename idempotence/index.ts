@@ -108,9 +108,6 @@ for (let i = 0; i < TOTAL; i += CONCURRENCY) {
   results.push(...(await Promise.all(batch)));
 }
 
-const incremented = results.filter((r) => r.status === "incremented").length;
-const cached = results.filter((r) => r.status === "cached").length;
-const failed = results.filter((r) => r.status === "failed").length;
 const retried = results.filter((r) => r.attempts > 1).length;
 const totalAttempts = results.reduce((sum, r) => sum + r.attempts, 0);
 
