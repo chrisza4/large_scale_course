@@ -1,31 +1,18 @@
+import { Mutex } from "async-mutex";
+
 // ── Idempotency store ────────────────────────────────────────────────────────
 
-// Values are either the settled result or the in-flight promise for that key.
-// Storing the promise makes the "claim" atomic (JS event loop is single-threaded
-// between awaits), so concurrent requests for the same key await the same work.
-const idempotencyStore = new Map<string, number | Promise<number>>();
+// Excersise for reader: Can you implement this as distributed lock in Redis?
+type IdempotencyEntry = { mutex: Mutex; value?: number };
+const store = new Map<string, IdempotencyEntry>();
 
-type IdempotencyOutcome =
-  | { cached: true; result: number }
-  | { cached: false; resolve: (result: number) => void };
-
-function claimOrJoin(key: string): IdempotencyOutcome | Promise<{ cached: true; result: number }> {
-  const entry = idempotencyStore.get(key);
-
-  if (entry !== undefined) {
-    if (entry instanceof Promise) {
-      return entry.then((result) => ({ cached: true as const, result }));
-    }
-    return { cached: true, result: entry };
+function getEntry(key: string): IdempotencyEntry {
+  let entry = store.get(key);
+  if (!entry) {
+    entry = { mutex: new Mutex() };
+    store.set(key, entry);
   }
-
-  // Atomically reserve this key before any await.
-  let resolve!: (result: number) => void;
-  const promise = new Promise<number>((res) => { resolve = res; });
-  idempotencyStore.set(key, promise);
-  promise.then((result) => idempotencyStore.set(key, result));
-
-  return { cached: false, resolve };
+  return entry;
 }
 
 // ── Server ────────────────────────────────────────────────────────────────────
@@ -44,20 +31,25 @@ const server = Bun.serve({
           });
         }
 
-        const outcome = await claimOrJoin(key);
+        const entry = getEntry(key);
+        // Important: Idempotency check must be atomic
+        return entry.mutex.runExclusive(async () => {
+          if (entry.value !== undefined) {
+            return Response.json({ counter: entry.value, cached: true });
+          }
 
-        if (outcome.cached) {
-          return Response.json({ counter: outcome.result, cached: true });
-        }
+          if (Math.random() < 0.01) {
+            console.log(`[server] Simulating timeout for key ${key}`);
+            await Bun.sleep(2000);
+            if (Math.random() < 0.5) {
+              // Simulate actual network error where server do nothing
+              return Response.json({ error: "timeout error" }, { status: 500 });
+            }
+          }
 
-        if (Math.random() < 0.01) {
-          console.log(`[server] Simulating timeout for key ${key}`);
-          await Bun.sleep(2000);
-        }
-
-        const result = ++counter;
-        outcome.resolve(result);
-        return Response.json({ counter: result, cached: false });
+          entry.value = ++counter;
+          return Response.json({ counter: entry.value, cached: false });
+        });
       },
     },
   },
@@ -123,17 +115,10 @@ const retried = results.filter((r) => r.attempts > 1).length;
 const totalAttempts = results.reduce((sum, r) => sum + r.attempts, 0);
 
 console.log(`\n
-┌─────────────────────────────────────────┐
-│           Results (${TOTAL} requests)        │
-├─────────────────────────────────────────┤
-│  incremented (new):   ${String(incremented).padStart(5)}              │
-│  deduplicated (safe): ${String(cached).padStart(5)}              │
-│  failed (exhausted):  ${String(failed).padStart(5)}              │
-├─────────────────────────────────────────┤
-│  requests that retried: ${String(retried).padStart(3)}              │
-│  total HTTP attempts:  ${String(totalAttempts).padStart(4)}              │
-│  final counter value: ${String(counter).padStart(5)}              │
-└─────────────────────────────────────────┘
+Results (${TOTAL} requests)        
+- requests that retried: ${String(retried).padStart(3)}
+- total HTTP attempts:  ${String(totalAttempts).padStart(4)}
+- final counter value: ${String(counter).padStart(5)}
 `);
 
 server.stop();
