@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 var idempotencyStore = new IdempotencyStore();
 var counter = 0;
 var counterLock = new object();
@@ -29,19 +31,16 @@ app.MapPost("/increment", async (HttpContext ctx) =>
         }
     }
 
-    int? cached;
-    try
+    var claim = idempotencyStore.GetCachedOrNew(key);
+
+    if (claim.State == State.Done)
     {
-        cached = idempotencyStore.GetOrWait(key);
+        return Results.Ok(new { value = claim.Result, @cached = true });
     }
-    catch (OperationCanceledException)
+    if (claim.State == State.Cancelled)
     {
-        // Original request failed; tell the client to retry
         return Results.StatusCode(503);
     }
-
-    if (cached.HasValue)
-        return Results.Ok(new { value = cached.Value, @cached = true });
 
     try
     {
@@ -51,12 +50,12 @@ app.MapPost("/increment", async (HttpContext ctx) =>
             counter++;
             result = counter;
         }
-        idempotencyStore.Complete(key, result);
+        idempotencyStore.Complete(claim, result);
         return Results.Ok(new { value = result, @cached = false });
     }
     catch
     {
-        idempotencyStore.Cancel(key);
+        idempotencyStore.Cancel(claim);
         throw;
     }
 });
@@ -70,69 +69,66 @@ app.MapPost("/reset", () =>
 });
 
 app.Run();
+internal enum State { Pending, Done, Cancelled }
+
+internal class Entry
+{
+    public State State = State.Pending;
+    public int Result;
+}
 
 class IdempotencyStore
 {
-    enum State { Pending, Done, Cancelled }
 
-    // There is more optimal way for this, using TaskCompletionSource. But this is too C# things
-    record Entry(State State, int Result = 0);
+    private readonly ConcurrentDictionary<string, Entry> _store = new();
 
-    private readonly Dictionary<string, Entry> _store = new();
-
-    private readonly object _mutex = new();
-
-    // Returns null  → you are the owner; call Complete() or Cancel() when done.
-    // Returns int   → cached result from a previous completed request.
-    // Throws OperationCanceledException → previous request failed; caller should return 503.
-    public int? GetOrWait(string key)
+    public Entry GetCachedOrNew(string key)
     {
-        lock (_mutex)
-        {
-            if (!_store.TryGetValue(key, out var entry))
-            {
-                _store[key] = new Entry(State.Pending);
-                return null; // this caller is the owner
-            }
+        var newEntry = new Entry();
+        var entry = _store.GetOrAdd(key, newEntry);
 
-            // Wait until the in-flight request finishes (or the store is cleared)
+        if (ReferenceEquals(entry, newEntry))
+            return newEntry; // we're the owner
+
+        lock (entry)
+        {
             while (entry.State == State.Pending)
-            {
-                Monitor.Wait(_mutex);
-                if (!_store.TryGetValue(key, out entry))
-                    throw new OperationCanceledException(); // store was reset
-            }
+                Monitor.Wait(entry);
+        }
 
-            return entry.State == State.Done
-                ? entry.Result
-                : throw new OperationCanceledException();
+        return entry;
+    }
+
+    public void Complete(Entry claim, int value)
+    {
+        lock (claim)
+        {
+            if (claim.State != State.Pending) return; // lost race with Clear()
+            claim.State = State.Done;
+            claim.Result = value;
+            Monitor.PulseAll(claim);
         }
     }
 
-    public void Complete(string key, int value)
+    public void Cancel(Entry claim)
     {
-        lock (_mutex)
+        lock (claim)
         {
-            _store[key] = new Entry(State.Done, value);
-            Monitor.PulseAll(_mutex); // wake up all waiters
-        }
-    }
-
-    public void Cancel(string key)
-    {
-        lock (_mutex)
-        {
-            _store[key] = new Entry(State.Cancelled);
-            Monitor.PulseAll(_mutex); // wake up all waiters
+            if (claim.State != State.Pending) return;
+            claim.State = State.Cancelled;
+            Monitor.PulseAll(claim);
         }
     }
 
     public void Clear()
     {
-        lock (_mutex)
-        {
-            _store.Clear();
-            Monitor.PulseAll(_mutex); // waiters wake up, see entry gone, throw
-        }
+        var entries = _store.Values.ToList();
+        _store.Clear();
+        foreach (var entry in entries)
+            lock (entry)
+            {
+                entry.State = State.Cancelled;
+                Monitor.PulseAll(entry);
+            }
     }
 }
