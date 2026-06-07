@@ -40,6 +40,7 @@ let lastResult = 0;
 const BATCH_SIZE = 100;
 
 async function main() {
+  await fetch(`${SERVER}/reset`, { method: "POST" });
   console.log(`Sending ${TOTAL} increment requests to ${SERVER}...\n`);
   let totalRetries = 0;
   let cachedCount = 0;
