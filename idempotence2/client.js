@@ -28,14 +28,24 @@ async function incrementWithRetry(key) {
       const result = await increment(key);
       return { ...result, attempts };
     } catch (err) {
+      const isTimeout = err.name === "AbortError";
+      const isInProgress = err.message === "HTTP 409";
+      if (!isTimeout && !isInProgress) {
+        throw err;
+      }
       console.log(
         `  [retry ${attempts}] key=${key.slice(0, 8)}... reason=${err.message}`,
       );
+      if (isInProgress) {
+        inProgressCount++;
+        await new Promise((r) => setTimeout(r, 50));
+      }
     }
   }
 }
 
 let lastResult = 0;
+let inProgressCount = 0;
 
 const BATCH_SIZE = 100;
 
@@ -64,8 +74,9 @@ async function main() {
   console.log(`\nDone.`);
   console.log(`  Total operations : ${TOTAL}`);
   console.log(`  Total retries    : ${totalRetries}`);
+  console.log(`  Total in-progress    : ${inProgressCount}`);
   console.log(`  Cached responses : ${cachedCount}`);
-  console.log(`  Final: `);
+  console.log(`  Final: ${lastResult}`);
 }
 
 main();

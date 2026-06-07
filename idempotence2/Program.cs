@@ -13,6 +13,7 @@ app.MapPost("/increment", async (HttpContext ctx) =>
     if (string.IsNullOrEmpty(key))
         return Results.BadRequest("Missing Idempotency-Key header");
 
+    Console.WriteLine("key:" + key);
     var thisRand = Random.Shared.NextDouble();
 
     // 10% timeout
@@ -21,7 +22,7 @@ app.MapPost("/increment", async (HttpContext ctx) =>
         // Half of it, just simply slow response
         if (thisRand < 0.05)
         {
-            await Task.Delay(1000);
+            await Task.Delay(1000, ctx.RequestAborted);
         }
         // Another half, not processed
         else
@@ -31,15 +32,16 @@ app.MapPost("/increment", async (HttpContext ctx) =>
         }
     }
 
-    var claim = idempotencyStore.GetCachedOrNew(key);
-
-    if (claim.State == State.Done)
+    var (claim, owned) = idempotencyStore.GetOrCreate(key);
+    if (!owned)
     {
-        return Results.Ok(new { value = claim.Result, @cached = true });
-    }
-    if (claim.State == State.Cancelled)
-    {
-        return Results.StatusCode(503);
+        Console.WriteLine("Got retry:");
+        return claim.State switch
+        {
+            State.Done => Results.Ok(new { value = claim.Result, @cached = true }),
+            State.Cancelled => Results.StatusCode(503),
+            _ => Results.Conflict(),
+        };
     }
 
     try
@@ -82,21 +84,11 @@ class IdempotencyStore
 
     private readonly ConcurrentDictionary<string, Entry> _store = new();
 
-    public Entry GetCachedOrNew(string key)
+    public (Entry entry, bool owned) GetOrCreate(string key)
     {
-        var newEntry = new Entry();
-        var entry = _store.GetOrAdd(key, newEntry);
-
-        if (ReferenceEquals(entry, newEntry))
-            return newEntry; // we're the owner
-
-        lock (entry)
-        {
-            while (entry.State == State.Pending)
-                Monitor.Wait(entry);
-        }
-
-        return entry;
+        var fresh = new Entry();
+        var entry = _store.GetOrAdd(key, fresh);
+        return (entry, ReferenceEquals(entry, fresh));
     }
 
     public void Complete(Entry claim, int value)
@@ -104,9 +96,8 @@ class IdempotencyStore
         lock (claim)
         {
             if (claim.State != State.Pending) return; // lost race with Clear()
-            claim.State = State.Done;
             claim.Result = value;
-            Monitor.PulseAll(claim);
+            claim.State = State.Done;
         }
     }
 
@@ -116,7 +107,6 @@ class IdempotencyStore
         {
             if (claim.State != State.Pending) return;
             claim.State = State.Cancelled;
-            Monitor.PulseAll(claim);
         }
     }
 
@@ -126,9 +116,6 @@ class IdempotencyStore
         _store.Clear();
         foreach (var entry in entries)
             lock (entry)
-            {
                 entry.State = State.Cancelled;
-                Monitor.PulseAll(entry);
-            }
     }
 }
