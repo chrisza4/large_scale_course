@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using Microsoft.Net.Http.Headers;
 
 var idempotencyStore = new IdempotencyStore();
 var counter = 0;
@@ -6,23 +8,29 @@ var counterLock = new object();
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
+var keys = new HashSet<string>();
 
 app.MapPost("/increment", async (HttpContext ctx) =>
 {
     var key = ctx.Request.Headers["Idempotency-Key"].FirstOrDefault();
     if (string.IsNullOrEmpty(key))
+    {
         return Results.BadRequest("Missing Idempotency-Key header");
+    }
 
-    Console.WriteLine("key:" + key);
     var thisRand = Random.Shared.NextDouble();
-
+    if (keys.Contains(key))
+    {
+        Console.WriteLine("Supposed to retry:" + key);
+    }
+    keys.Add(key);
     // 10% timeout
     if (thisRand < 0.1)
     {
         // Half of it, just simply slow response
         if (thisRand < 0.05)
         {
-            await Task.Delay(1000, ctx.RequestAborted);
+            await Task.Delay(2000, ctx.RequestAborted);
         }
         // Another half, not processed
         else

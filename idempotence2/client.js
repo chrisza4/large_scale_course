@@ -1,5 +1,5 @@
 const SERVER = "http://localhost:5105";
-const TOTAL = 1000;
+const TOTAL = 100;
 const TIMEOUT_MS = 500;
 
 async function increment(key) {
