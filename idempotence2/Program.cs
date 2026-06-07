@@ -29,105 +29,110 @@ app.MapPost("/increment", async (HttpContext ctx) =>
         }
     }
 
-    using (var reservation = idempotencyStore.GetOrReserve(key))
+    int? cached;
+    try
     {
-        if (!reservation.IsNew)
-        {
-            try
-            {
-                return Results.Ok(new { value = await reservation.Task, @cached = true });
-            }
-            catch (OperationCanceledException)
-            {
-                // Original request failed; tell the client to retry
-                return Results.StatusCode(503);
-            }
-        }
+        cached = idempotencyStore.GetOrWait(key);
+    }
+    catch (OperationCanceledException)
+    {
+        // Original request failed; tell the client to retry
+        return Results.StatusCode(503);
+    }
 
+    if (cached.HasValue)
+        return Results.Ok(new { value = cached.Value, @cached = true });
+
+    try
+    {
         int result;
         lock (counterLock)
         {
             counter++;
             result = counter;
         }
-
-        reservation.Complete(result);
+        idempotencyStore.Complete(key, result);
         return Results.Ok(new { value = result, @cached = false });
     }
+    catch
+    {
+        idempotencyStore.Cancel(key);
+        throw;
+    }
 });
-
-app.Run();
 
 app.MapPost("/reset", () =>
 {
     lock (counterLock)
-    {
         counter = 0;
-    }
     idempotencyStore.Clear();
     return Results.Ok(new { message = "Reset" });
 });
+
+app.Run();
+
 class IdempotencyStore
 {
-    private readonly Dictionary<string, TaskCompletionSource<int>> _store = [];
-    private readonly Lock _lock = new();
+    enum State { Pending, Done, Cancelled }
 
-    public Reservation GetOrReserve(string key)
+    // There is more optimal way for this, using TaskCompletionSource. But this is too C# things
+    record Entry(State State, int Result = 0);
+
+    private readonly Dictionary<string, Entry> _store = new();
+
+    private readonly object _mutex = new();
+
+    // Returns null  → you are the owner; call Complete() or Cancel() when done.
+    // Returns int   → cached result from a previous completed request.
+    // Throws OperationCanceledException → previous request failed; caller should return 503.
+    public int? GetOrWait(string key)
     {
-        // This is what prevent race condition, but it is not optimal (Excersise: Why and what could be better)
-        lock (_lock)
+        lock (_mutex)
         {
-            if (_store.TryGetValue(key, out var existing))
-                return new Reservation(this, key, existing.Task, isNew: false);
-            var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _store[key] = tcs;
-            return new Reservation(this, key, tcs.Task, isNew: true);
+            if (!_store.TryGetValue(key, out var entry))
+            {
+                _store[key] = new Entry(State.Pending);
+                return null; // this caller is the owner
+            }
+
+            // Wait until the in-flight request finishes (or the store is cleared)
+            while (entry.State == State.Pending)
+            {
+                Monitor.Wait(_mutex);
+                if (!_store.TryGetValue(key, out entry))
+                    throw new OperationCanceledException(); // store was reset
+            }
+
+            return entry.State == State.Done
+                ? entry.Result
+                : throw new OperationCanceledException();
         }
     }
 
-    internal void Complete(string key, int value)
+    public void Complete(string key, int value)
     {
-        lock (_lock)
-            if (_store.TryGetValue(key, out var tcs))
-                tcs.SetResult(value);
+        lock (_mutex)
+        {
+            _store[key] = new Entry(State.Done, value);
+            Monitor.PulseAll(_mutex); // wake up all waiters
+        }
+    }
+
+    public void Cancel(string key)
+    {
+        lock (_mutex)
+        {
+            _store[key] = new Entry(State.Cancelled);
+            Monitor.PulseAll(_mutex); // wake up all waiters
+        }
     }
 
     public void Clear()
     {
-        lock (_lock)
+        lock (_mutex)
         {
-            foreach (var tcs in _store.Values)
-                tcs.TrySetCanceled();
             _store.Clear();
+            Monitor.PulseAll(_mutex); // waiters wake up, see entry gone, throw
         }
-    }
-
-    // Removes the reservation and unblocks any waiters with a cancellation so they can retry.
-    internal void Cancel(string key)
-    {
-        lock (_lock)
-            if (_store.Remove(key, out var tcs))
-                tcs.TrySetCanceled();
-    }
-}
-
-class Reservation(IdempotencyStore store, string key, Task<int> task, bool isNew) : IDisposable
-{
-    public bool IsNew { get; } = isNew;
-    public Task<int> Task { get; } = task;
-    private bool _completed;
-
-    public void Complete(int value)
-    {
-        _completed = true;
-        store.Complete(key, value);
-    }
-
-    // If the owner never called Complete (e.g. exception, early return), cancel the reservation
-    // so waiting callers get a 503 and can retry rather than hanging forever.
-    public void Dispose()
-    {
-        if (IsNew && !_completed)
-            store.Cancel(key);
     }
 }
