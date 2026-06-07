@@ -1,8 +1,5 @@
 import { Mutex } from "async-mutex";
 
-// ── Idempotency store ────────────────────────────────────────────────────────
-
-// Excersise for reader: Can you implement this as distributed lock in Redis?
 type IdempotencyEntry = { mutex: Mutex; value?: number };
 const store = new Map<string, IdempotencyEntry>();
 
@@ -32,7 +29,9 @@ const server = Bun.serve({
         }
 
         const entry = getEntry(key);
+
         // Important: Idempotency check must be atomic
+        // Excersise for reader: Can you implement this as distributed lock in Redis?
         return entry.mutex.runExclusive(async () => {
           if (entry.value !== undefined) {
             return Response.json({ counter: entry.value, cached: true });
