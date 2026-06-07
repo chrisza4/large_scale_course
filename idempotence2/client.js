@@ -1,6 +1,6 @@
 const SERVER = "http://localhost:5105";
-const TOTAL = 100;
-const TIMEOUT_MS = 500;
+const TOTAL = 500;
+const TIMEOUT_MS = 100;
 
 async function increment(key) {
   const controller = new AbortController();
@@ -38,7 +38,7 @@ async function incrementWithRetry(key) {
       );
       if (isInProgress) {
         inProgressCount++;
-        await new Promise((r) => setTimeout(r, 50));
+        // await new Promise((r) => setTimeout(r, 50));
       }
     }
   }

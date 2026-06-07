@@ -12,6 +12,9 @@ var keys = new HashSet<string>();
 
 app.MapPost("/increment", async (HttpContext ctx) =>
 {
+    // For C#
+    ctx.RequestAborted = CancellationToken.None;
+
     var key = ctx.Request.Headers["Idempotency-Key"].FirstOrDefault();
     if (string.IsNullOrEmpty(key))
     {
@@ -19,11 +22,6 @@ app.MapPost("/increment", async (HttpContext ctx) =>
     }
 
     var thisRand = Random.Shared.NextDouble();
-    if (keys.Contains(key))
-    {
-        Console.WriteLine("Supposed to retry:" + key);
-    }
-    keys.Add(key);
     // 10% timeout
     if (thisRand < 0.1)
     {
@@ -40,10 +38,12 @@ app.MapPost("/increment", async (HttpContext ctx) =>
         }
     }
 
+
     var (claim, owned) = idempotencyStore.GetOrCreate(key);
+
     if (!owned)
     {
-        Console.WriteLine("Got retry:");
+        Console.WriteLine($"Processed duplicated: key={key} state={claim.State} result={claim.Result}");
         return claim.State switch
         {
             State.Done => Results.Ok(new { value = claim.Result, @cached = true }),
@@ -92,9 +92,14 @@ class IdempotencyStore
 
     private readonly ConcurrentDictionary<string, Entry> _store = new();
 
+    public bool Contain(string key)
+    {
+        return _store.ContainsKey(key);
+    }
     public (Entry entry, bool owned) GetOrCreate(string key)
     {
         var fresh = new Entry();
+        // Get or add is important here
         var entry = _store.GetOrAdd(key, fresh);
         return (entry, ReferenceEquals(entry, fresh));
     }
