@@ -15,11 +15,13 @@ export class Cache {
   }
 
   async write(user: User): Promise<void> {
+    // Write and don't care
     await this.ds.write(user);
   }
 }
 
 async function main() {
+  // The key is to abstract cache logic
   const cache = new Cache(new DataSource());
   await cache.write({ id: "1", name: "Alice" });
   console.log(await cache.read("1"));

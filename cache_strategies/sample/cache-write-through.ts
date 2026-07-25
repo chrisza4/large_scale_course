@@ -15,12 +15,16 @@ export class Cache {
   }
 
   async write(user: User): Promise<void> {
+    // Write both and then response
     await this.ds.write(user);
+
+    // Simple add this part (maybe longer line depends on cache technology you use)
     this.cache.set(user.id, user);
   }
 }
 
 async function main() {
+  // The key is to abstract cache logic
   const cache = new Cache(new DataSource());
   await cache.write({ id: "1", name: "Alice" });
   console.log(await cache.read("1"));
