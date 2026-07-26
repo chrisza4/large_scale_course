@@ -1,0 +1,24 @@
+services:
+  shard-am:
+    image: postgres:latest
+    container_name: shard-am
+    environment:
+      POSTGRES_DB: sharding_demo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  shard-nz:
+    image: postgres:latest
+    container_name: shard-nz
+    environment:
+      POSTGRES_DB: sharding_demo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
