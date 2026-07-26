@@ -1,0 +1,39 @@
+@host = http://localhost:3000
+
+### Create a user with a country code in A-M (routes to shard-am)
+POST {{host}}/users
+Content-Type: application/json
+
+{
+  "id": "11111111-1111-1111-1111-111111111111",
+  "name": "Alice",
+  "country_code": "AR"
+}
+
+### Create a user with a country code in N-Z (routes to shard-nz)
+POST {{host}}/users
+Content-Type: application/json
+
+{
+  "id": "22222222-2222-2222-2222-222222222222",
+  "name": "Zack",
+  "country_code": "TH"
+}
+
+### Read Alice by id only (server checks shard-am first, finds her there)
+GET {{host}}/users/11111111-1111-1111-1111-111111111111
+
+### Read Zack by id only (server checks shard-am first, misses, then checks shard-nz)
+GET {{host}}/users/22222222-2222-2222-2222-222222222222
+
+### Read Alice by id + her real country code (routes straight to shard-am, hit)
+GET {{host}}/users/11111111-1111-1111-1111-111111111111/AR
+
+### Read Zack by id + his real country code (routes straight to shard-nz, hit)
+GET {{host}}/users/22222222-2222-2222-2222-222222222222/TH
+
+### Read Alice by id + wrong country code (routes to shard-nz, miss -> 404)
+GET {{host}}/users/11111111-1111-1111-1111-111111111111/TH
+
+### Read a non-existent user by id (checks both shards, not found -> 404)
+GET {{host}}/users/99999999-9999-9999-9999-999999999999
