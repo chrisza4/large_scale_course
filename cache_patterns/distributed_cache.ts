@@ -1,8 +1,4 @@
-// Memoization: remember the result of a function call for a given input,
-// so calling it again with the same input skips the work and returns
-// the saved answer instead.
-
-const cache = new Map();
+const redis = Bun.redis;
 
 // Emulated data store: a hashmap standing in for a slow DB/API call.
 const userStore = new Map([
@@ -12,14 +8,16 @@ const userStore = new Map([
 ]);
 
 async function memoizedFetchUser(id: number) {
-  if (cache.has(id)) {
+  const key = `user:${id}`;
+  const cached = await redis.get(key);
+  if (cached) {
     console.log(`cache hit for ${id}`);
-    return cache.get(id);
+    return JSON.parse(cached);
   }
 
   console.log(`cache miss for ${id}, fetching...`);
   const result = await fetchUser(id);
-  cache.set(id, result);
+  await redis.set(key, JSON.stringify(result));
   return result;
 }
 
@@ -39,8 +37,4 @@ console.time("second call");
 console.log(await memoizedFetchUser(1));
 console.timeEnd("second call");
 
-// Is memoized function read-aside or read-through?
-// Well... if I am in memoizedFetchUser, it is read aside
-// From perspective of conosle.log() in main, it is read through
-// That is why I think read-aside vs. read-through does not make much sense
-// The real design choice is - which layer would you cache this?
+// Not so difference from memoization, but now we use external cache store

@@ -10,5 +10,13 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/MAJOR/docker
 
+  redis:
+    image: redis:8
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
 volumes:
   pgdata:
+  redisdata:

@@ -3,23 +3,26 @@ import { DataSource, User } from "./datasource";
 export class Cache {
   private cache = new Map<string, User | null>();
 
-  constructor(private ds: DataSource) {}
+  constructor(private datasource: DataSource) {}
 
   async read(id: string): Promise<User | null> {
     if (this.cache.has(id)) {
       return this.cache.get(id) || null;
     }
-    const user = await this.ds.read(id);
+    const user = await this.datasource.read(id);
     this.cache.set(id, user);
     return user;
   }
 
   async write(user: User): Promise<void> {
     // Write both and then response
-    await this.ds.write(user);
+    await this.datasource.write(user);
 
     // Simple add this part (maybe longer line depends on cache technology you use)
     this.cache.set(user.id, user);
+
+    // Statement: It is very important to write to datasource before cache
+    // Question: Why?
   }
 }
 

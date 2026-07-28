@@ -3,20 +3,23 @@ import { DataSource, User } from "./datasource";
 export class Cache {
   private cache = new Map<string, User | null>();
 
-  constructor(private ds: DataSource) {}
+  constructor(private datasource: DataSource) {}
 
   async read(id: string): Promise<User | null> {
     if (this.cache.has(id)) {
       return this.cache.get(id) || null;
     }
-    const user = await this.ds.read(id);
+    const user = await this.datasource.read(id);
     this.cache.set(id, user);
     return user;
   }
 
   async write(user: User): Promise<void> {
     // Write and don't care
-    await this.ds.write(user);
+    await this.datasource.write(user);
+
+    // Or alternatively, invalidate
+    // this.cache.delete(user.id);
   }
 }
 
