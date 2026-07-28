@@ -27,6 +27,8 @@ const raw = await sql`
 console.timeEnd("raw query");
 console.log(raw);
 
+// สร้าง View ที่เก็บข้อมูลจริงๆ แยกกันออกมา
+// เวลาอ่าน มันจะไม่ไปอ่านจากตารางเดิม แต่อ่านจากพื้นที่ใหม่ในดิสก์ ทำให้ไม่ต้องคำนวนใหม่
 await sql`DROP MATERIALIZED VIEW IF EXISTS sales_by_product`;
 await sql`
   CREATE MATERIALIZED VIEW sales_by_product AS
@@ -34,6 +36,8 @@ await sql`
   FROM orders
   GROUP BY product
 `;
+
+// ต้องมี Unique index ถึงจะ Refresh ได้เร็วขึ้น จาก Postgresql
 await sql`CREATE UNIQUE INDEX ON sales_by_product (product)`;
 
 console.time("materialized view query");
@@ -48,6 +52,7 @@ await sql`INSERT INTO orders (product, amount) VALUES ('widget', 9999)`;
 console.log("\n3) View is stale until refreshed:");
 console.log(await sql`SELECT * FROM sales_by_product WHERE product = 'widget'`);
 
+// Refresh cache
 await sql`REFRESH MATERIALIZED VIEW CONCURRENTLY sales_by_product`;
 
 console.log("\n4) Fresh after REFRESH MATERIALIZED VIEW CONCURRENTLY:");
@@ -73,3 +78,17 @@ async function init() {
   }));
   await sql`INSERT INTO orders ${sql(rows)}`;
 }
+
+/* 
+
+จะเห็นว่าสิ่งที่ต้องออกแบบคือ Refresh เมื่อไหร่ดีนะ?
+แล้วกระบวนการ Refresh เป็นยังไงบ้าง
+
+ถ้าใน Postgresql เราไม่อยากให้มัน Refresh แล้ว Lock ทั้งตาราง ต้องใช้ Unique Index
+แต่ของเจ้าอื่นไม่ตรงกัน
+
+จุดที่เราต้องสนใจคือ
+1. Refresh เมื่อไหร่ (What is cache invalidation strategy?) - อาจจะทุกวัน หรือ ทุกครั้งที่ Product update หรือทุกครั้งที่ Deploy ระบบใหม่?
+2. ตอน Refresh มีปัญหาอะไรบ้าง (How does cache invalidation works?) - 
+
+*/
