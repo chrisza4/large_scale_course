@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Message Queue Mythbuster</title>
+    <style>
+      :root {
+        --bg1: #ff9a9e;
+        --bg2: #fecfef;
+        --bg3: #a18cd1;
+        --card: #ffffff;
+        --ink: #2d1b4e;
+        --sub: #6b5b8a;
+        --valid: #2ecc71;
+        --notvalid: #ff6b6b;
+        --accent: #845ef7;
+        --accent2: #ffd43b;
+        --shadow: 0 10px 30px rgba(80, 40, 140, 0.18);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          "Segoe UI", "Noto Sans Thai", "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(
+          135deg,
+          var(--bg1),
+          var(--bg2) 45%,
+          var(--bg3)
+        );
+        background-attachment: fixed;
+        min-height: 100vh;
+        color: var(--ink);
+        padding: 24px 16px 80px;
+      }
+      .wrap {
+        max-width: 820px;
+        margin: 0 auto;
+      }
+      header {
+        text-align: center;
+        margin-bottom: 28px;
+        animation: floaty 4s ease-in-out infinite;
+      }
+      @keyframes floaty {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-6px);
+        }
+      }
+      h1 {
+        font-size: clamp(28px, 5vw, 44px);
+        margin: 0 0 6px;
+        color: #fff;
+        text-shadow:
+          0 2px 0 #5a2a86,
+          0 4px 18px rgba(0, 0, 0, 0.45);
+      }
+      h1 .emoji {
+        filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+      }
+      .subtitle {
+        color: var(--ink);
+        font-size: 15px;
+        max-width: 640px;
+        margin: 0 auto;
+        line-height: 1.6;
+        background: rgba(255, 255, 255, 0.92);
+        border-radius: 14px;
+        padding: 12px 18px;
+        box-shadow: 0 6px 18px rgba(80, 40, 140, 0.2);
+      }
+      .rule {
+        font-weight: 700;
+        color: #b6291f;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        padding: 22px 22px 20px;
+        margin-bottom: 20px;
+        border: 3px solid transparent;
+        transition:
+          transform 0.15s ease,
+          border-color 0.2s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      .card:hover {
+        transform: translateY(-2px);
+      }
+      .qnum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        background: var(--accent);
+        color: #fff;
+        border-radius: 50%;
+        font-weight: 800;
+        font-size: 14px;
+        margin-right: 10px;
+        flex-shrink: 0;
+      }
+      .qtext {
+        display: flex;
+        align-items: flex-start;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.5;
+        margin-bottom: 16px;
+      }
+      .choices {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+      .choice {
+        flex: 1;
+        min-width: 130px;
+        position: relative;
+      }
+      .choice input {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        cursor: pointer;
+      }
+      .choice label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 12px 10px;
+        border-radius: 14px;
+        border: 2px solid #e6e0f5;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        background: #faf9fd;
+      }
+      .choice input:checked + label {
+        transform: scale(1.03);
+      }
+      .choice.valid input:checked + label {
+        background: linear-gradient(135deg, #d4fce0, #b8f5cf);
+        border-color: var(--valid);
+        color: #1a7a3e;
+        box-shadow: 0 4px 14px rgba(46, 204, 113, 0.3);
+      }
+      .choice.notvalid input:checked + label {
+        background: linear-gradient(135deg, #ffe0e0, #ffc9c9);
+        border-color: var(--notvalid);
+        color: #b6291f;
+        box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3);
+      }
+      textarea {
+        width: 100%;
+        min-height: 64px;
+        border-radius: 12px;
+        border: 2px solid #e6e0f5;
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 14px;
+        resize: vertical;
+        background: #faf9fd;
+        color: var(--ink);
+      }
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        background: #fff;
+      }
+      .label-small {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--sub);
+        margin: 4px 0 6px;
+        display: block;
+      }
+      .reveal-box {
+        margin-top: 14px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        display: none;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .reveal-box.show {
+        display: block;
+        animation: pop 0.3s ease;
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      .reveal-box.correct {
+        background: #eafff1;
+        border: 2px dashed var(--valid);
+      }
+      .reveal-box.wrong {
+        background: #fff1f1;
+        border: 2px dashed var(--notvalid);
+      }
+      .reveal-tag {
+        font-weight: 800;
+        margin-right: 6px;
+      }
+      .correct .reveal-tag {
+        color: #1a7a3e;
+      }
+      .wrong .reveal-tag {
+        color: #b6291f;
+      }
+      .answer-pill {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        margin-left: 4px;
+      }
+      .answer-pill.valid {
+        background: var(--valid);
+        color: #fff;
+      }
+      .answer-pill.notvalid {
+        background: var(--notvalid);
+        color: #fff;
+      }
+      .card.correct-flash {
+        border-color: var(--valid);
+      }
+      .card.wrong-flash {
+        border-color: var(--notvalid);
+      }
+
+      .cta-row {
+        text-align: center;
+        margin: 30px 0;
+      }
+      #revealBtn {
+        background: linear-gradient(135deg, var(--accent), #ff8fd4);
+        color: #fff;
+        border: none;
+        padding: 16px 40px;
+        font-size: 18px;
+        font-weight: 800;
+        border-radius: 999px;
+        cursor: pointer;
+        box-shadow: 0 10px 24px rgba(132, 94, 247, 0.45);
+        transition: transform 0.15s ease;
+      }
+      #revealBtn:hover {
+        transform: translateY(-2px) scale(1.02);
+      }
+      #revealBtn:active {
+        transform: scale(0.97);
+      }
+      #revealBtn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .hint {
+        color: #fff;
+        font-size: 13px;
+        margin-top: 10px;
+        opacity: 0.9;
+      }
+
+      #scoreCard {
+        display: none;
+        text-align: center;
+        background: #fff;
+        border-radius: 24px;
+        padding: 30px 20px;
+        box-shadow: var(--shadow);
+        margin: 10px 0 30px;
+        animation: pop 0.4s ease;
+      }
+      #scoreCard.show {
+        display: block;
+      }
+      #scoreTitle {
+        font-size: 26px;
+        font-weight: 900;
+        margin: 6px 0;
+      }
+      #scoreDetail {
+        color: var(--sub);
+        font-size: 15px;
+      }
+      .again-btn {
+        margin-top: 16px;
+        background: #fff;
+        border: 2px solid var(--accent);
+        color: var(--accent);
+        padding: 10px 22px;
+        border-radius: 999px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .again-btn:hover {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      footer {
+        text-align: center;
+        color: #fff;
+        opacity: 0.85;
+        font-size: 12px;
+        margin-top: 20px;
+      }
+
+      .confetti {
+        position: fixed;
+        top: -20px;
+        font-size: 20px;
+        pointer-events: none;
+        animation: fall linear forwards;
+        z-index: 999;
+      }
+      @keyframes fall {
+        to {
+          transform: translateY(105vh) rotate(360deg);
+          opacity: 0.3;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Message Queue Mythbuster</h1>
+        <div class="subtitle">
+          <p>
+            ข้างล่างเป็นเหตุผลที่คนนิยมใช้ในการเอา Message Queue เข้ามา
+            ข้อในเป็นเหตุผลที่ใช่จริงๆ
+            กับอันไหนที่ยังไม่ค่อยใช่เพราะมีทางเลือกอื่นที่ง่ายกว่านะ
+          </p>
+          <p>
+            วิธีเล่น: ในแต่ละข้อความ กรุณาเลือก <b>Valid</b> หรือ
+            <b>Not Valid</b> พร้อมใส่คำอธิบายข้างล่าง เสร็จแล้วกดปุ่ม "เฉลย!"
+            เพื่อดูว่าได้กี่ข้อ
+          </p>
+          <p class="rule">
+            ถ้ามีทางเลือกอื่นที่ไม่ใช่ Message Queue ที่ Simple กว่า ให้ถือว่า
+            Not Valid เสมอ
+          </p>
+        </div>
+      </header>
+
+      <div id="quiz"></div>
+
+      <div class="cta-row">
+        <button id="revealBtn">เฉลย!</button>
+        <div class="hint">ตอบให้ครบทุกข้อก่อนกดเฉลยนะ</div>
+      </div>
+
+      <div id="scoreCard">
+        <div id="scoreTitle"></div>
+        <div id="scoreDetail"></div>
+        <button class="again-btn" onclick="location.reload()">
+          เล่นอีกครั้ง
+        </button>
+      </div>
+    </div>
+
+    <script>
+      const QUESTIONS = [
+        {
+          text: "ใช้รองรับ Spike ของ traffic ได้",
+          answer: "valid",
+          explain: "Valid — ใช่ นี่คือเหตุผลหลักของการใช้ Message Queue จริง",
+        },
+        {
+          text: "ใช้เพื่อให้ Producer และ Consumer สามารถ Scale แยกจากกันได้",
+          answer: "valid",
+          explain:
+            "Valid — ใช่ เราสามารถขยายแต่ละฝั่งแยกกันเพื่อรองรับ Spike ได้",
+        },
+        {
+          text: "ถ้า Consumer ล่ม เราจะไม่เสียข้อมูล",
+          answer: "notvalid",
+          explain:
+            "Not Valid — วิธีที่ง่ายกว่าคือ Outbox Pattern + Idempotency ดูแลง่าย เข้าใจง่าย และใช้ Infra น้อยกว่า",
+        },
+        {
+          text: "รับประกันการส่งข้อมูลถึงปลายทาง (Guaranteed Delivery)",
+          answer: "notvalid",
+          explain:
+            "Not Valid — สุดท้ายก็ต้องแก้ด้วย Retry & Idempotency อยู่ดี ต่อให้มี Message Queue ก็เลี่ยงไม่ได้ (แต่ก็ช่วยระบบเดิมที่ไม่มีกลไกพวกนี้ได้บ้าง)",
+        },
+        {
+          text: "จำเป็นต้องใช้ Message Queue เพื่อทำ Async",
+          answer: "notvalid",
+          explain:
+            "Not Valid — ไม่จำเป็นเลยว่าการทำ Async ต้องใช้ Message Queue เสมอไป",
+        },
+        {
+          text: "ช่วยป้องกันปลายทางล่มเวลาโหลดมาไม่สม่ำเสมอ แต่เราไม่อยากปฏิเสธโหลด",
+          answer: "valid",
+          explain:
+            "Valid — ใช่เลย Message Queue ช่วย buffer โหลดที่มาไม่สม่ำเสมอได้ดี",
+        },
+        {
+          text: "ใช้ทำ Retry โดยที่เอาข้อความที่ล้มเหลวสามารถส่งไปที่ Dead-Letter Queue และลองใหม่ได้",
+          answer: "notvalid",
+          explain:
+            "Not Valid (Half valid ในทางทฤษฎี) — การทำ Retry ใน Domain ตัวเองมักง่ายกว่า ว่าอะไรเสร็จ/ไม่เสร็จ ต้อง Retry แบบไหน โดยไม่ต้องพึ่ง DLQ ของ Message Queue (ตามกติกา ถ้ามีทางเลือก Simple กว่า ถือว่า Not Valid)",
+        },
+      ];
+
+      const quizEl = document.getElementById("quiz");
+
+      QUESTIONS.forEach((q, i) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.id = "card-" + i;
+        card.innerHTML = `
+    <div class="qtext"><span class="qnum">${i + 1}</span><span>${q.text}</span></div>
+    <div class="choices">
+      <div class="choice valid">
+        <input type="radio" name="q${i}" id="q${i}-valid" value="valid">
+        <label for="q${i}-valid">Valid</label>
+      </div>
+      <div class="choice notvalid">
+        <input type="radio" name="q${i}" id="q${i}-notvalid" value="notvalid">
+        <label for="q${i}-notvalid">Not Valid</label>
+      </div>
+    </div>
+    <span class="label-small">คำอธิบายของคุณ (ไม่บังคับ)</span>
+    <textarea id="q${i}-note" placeholder="พิมพ์เหตุผลของคุณตรงนี้..."></textarea>
+    <div class="reveal-box" id="q${i}-reveal"></div>
+  `;
+        quizEl.appendChild(card);
+      });
+
+      function spawnConfetti() {
+        const emojis = ["🎉"];
+        for (let i = 0; i < 40; i++) {
+          const el = document.createElement("div");
+          el.className = "confetti";
+          el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+          el.style.left = Math.random() * 100 + "vw";
+          el.style.animationDuration = 2.5 + Math.random() * 2 + "s";
+          el.style.opacity = 0.7 + Math.random() * 0.3;
+          document.body.appendChild(el);
+          setTimeout(() => el.remove(), 5000);
+        }
+      }
+
+      document.getElementById("revealBtn").addEventListener("click", () => {
+        let answered = 0;
+        QUESTIONS.forEach((q, i) => {
+          const chosen = document.querySelector(`input[name="q${i}"]:checked`);
+          if (chosen) answered++;
+        });
+
+        if (answered < QUESTIONS.length) {
+          alert(
+            `ตอบให้ครบทุกข้อก่อนนะ! เหลืออีก ${QUESTIONS.length - answered} ข้อ`,
+          );
+          return;
+        }
+
+        let score = 0;
+        QUESTIONS.forEach((q, i) => {
+          const chosen = document.querySelector(
+            `input[name="q${i}"]:checked`,
+          ).value;
+          const card = document.getElementById("card-" + i);
+          const box = document.getElementById(`q${i}-reveal`);
+          const isCorrect = chosen === q.answer;
+          if (isCorrect) score++;
+
+          box.classList.add("show", isCorrect ? "correct" : "wrong");
+          card.classList.add(isCorrect ? "correct-flash" : "wrong-flash");
+
+          const pillClass = q.answer === "valid" ? "valid" : "notvalid";
+          const pillText = q.answer === "valid" ? "Valid" : "Not Valid";
+
+          box.innerHTML = `
+      <span class="reveal-tag">${isCorrect ? "🎯 ถูกต้อง!" : "💥 พลาดไปหน่อย"}</span>
+      เฉลย: <span class="answer-pill ${pillClass}">${pillText}</span><br>
+      ${q.explain}
+    `;
+        });
+
+        document.getElementById("revealBtn").disabled = true;
+
+        const scoreCard = document.getElementById("scoreCard");
+        const pct = Math.round((score / QUESTIONS.length) * 100);
+        let emoji, title;
+        if (score === QUESTIONS.length) {
+          emoji = "🏆";
+          title = "สุดยอด! Mythbuster ตัวจริง!";
+        } else if (pct >= 70) {
+          emoji = "🥳";
+          title = "เก่งมาก! เกือบเนียนหมด!";
+        } else if (pct >= 40) {
+          emoji = "🤔";
+          title = "พอไหว แต่ยังโดน Myth หลอกอยู่บ้าง";
+        } else {
+          emoji = "😅";
+          title = "โดน Myth เล่นงานยับ! ลองอ่านเฉลยดูนะ";
+        }
+
+        document.getElementById("scoreEmoji").textContent = emoji;
+        document.getElementById("scoreTitle").textContent = title;
+        document.getElementById("scoreDetail").textContent =
+          `คุณได้ ${score} / ${QUESTIONS.length} ข้อ (${pct}%)`;
+        scoreCard.classList.add("show");
+        scoreCard.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        if (score === QUESTIONS.length) spawnConfetti();
+      });
+    </script>
+  </body>
+</html>
