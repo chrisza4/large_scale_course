@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Message Queue Mythbuster</title>
+    <title>Queue Mythbuster</title>
     <style>
       :root {
         --bg1: #ff9a9e;
@@ -350,10 +350,10 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>Message Queue Mythbuster</h1>
+        <h1>Queue Mythbuster</h1>
         <div class="subtitle">
           <p>
-            ข้างล่างเป็นเหตุผลที่คนนิยมใช้ในการเอา Message Queue เข้ามา
+            ข้างล่างเป็นเหตุผลที่คนนิยมใช้ในการเอา Queue เข้ามา
             ข้อในเป็นเหตุผลที่ใช่จริงๆ
             กับอันไหนที่ยังไม่ค่อยใช่เพราะมีทางเลือกอื่นที่ง่ายกว่านะ
           </p>
@@ -363,8 +363,8 @@
             เพื่อดูว่าได้กี่ข้อ
           </p>
           <p class="rule">
-            ถ้ามีทางเลือกอื่นที่ไม่ใช่ Message Queue ที่ Simple กว่า ให้ถือว่า
-            Not Valid เสมอ
+            ถ้ามีทางเลือกอื่นที่ไม่ใช่ Queue ที่ Simple กว่า ให้ถือว่า Not Valid
+            เสมอ
           </p>
         </div>
       </header>
@@ -390,7 +390,7 @@
         {
           text: "ใช้รองรับ Spike ของ traffic ได้",
           answer: "valid",
-          explain: "Valid — ใช่ นี่คือเหตุผลหลักของการใช้ Message Queue จริง",
+          explain: "Valid — ใช่ นี่คือเหตุผลหลักของการใช้ Queue จริง",
         },
         {
           text: "ใช้เพื่อให้ Producer และ Consumer สามารถ Scale แยกจากกันได้",
@@ -408,25 +408,24 @@
           text: "รับประกันการส่งข้อมูลถึงปลายทาง (Guaranteed Delivery)",
           answer: "notvalid",
           explain:
-            "Not Valid — สุดท้ายก็ต้องแก้ด้วย Retry & Idempotency อยู่ดี ต่อให้มี Message Queue ก็เลี่ยงไม่ได้ (แต่ก็ช่วยระบบเดิมที่ไม่มีกลไกพวกนี้ได้บ้าง)",
+            "Not Valid — สุดท้ายก็ต้องแก้ด้วย Retry & Idempotency อยู่ดี ต่อให้มี Queue ก็เลี่ยงไม่ได้ (แต่ก็ช่วยระบบเดิมที่ไม่มีกลไกพวกนี้ได้บ้าง)",
         },
         {
-          text: "จำเป็นต้องใช้ Message Queue เพื่อทำ Async",
+          text: "จำเป็นต้องใช้ Queue เพื่อทำ Async",
           answer: "notvalid",
           explain:
-            "Not Valid — ไม่จำเป็นเลยว่าการทำ Async ต้องใช้ Message Queue เสมอไป",
+            "Not Valid — ไม่จำเป็นเลยว่าการทำ Async ต้องใช้ Queue เสมอไป",
         },
         {
           text: "ช่วยป้องกันปลายทางล่มเวลาโหลดมาไม่สม่ำเสมอ แต่เราไม่อยากปฏิเสธโหลด",
           answer: "valid",
-          explain:
-            "Valid — ใช่เลย Message Queue ช่วย buffer โหลดที่มาไม่สม่ำเสมอได้ดี",
+          explain: "Valid — ใช่เลย Queue ช่วย buffer โหลดที่มาไม่สม่ำเสมอได้ดี",
         },
         {
           text: "ใช้ทำ Retry โดยที่เอาข้อความที่ล้มเหลวสามารถส่งไปที่ Dead-Letter Queue และลองใหม่ได้",
           answer: "notvalid",
           explain:
-            "Not Valid (Half valid ในทางทฤษฎี) — การทำ Retry ใน Domain ตัวเองมักง่ายกว่า ว่าอะไรเสร็จ/ไม่เสร็จ ต้อง Retry แบบไหน โดยไม่ต้องพึ่ง DLQ ของ Message Queue (ตามกติกา ถ้ามีทางเลือก Simple กว่า ถือว่า Not Valid)",
+            "Not Valid (Half valid ในทางทฤษฎี) — การทำ Retry ใน Domain ตัวเองมักง่ายกว่า ว่าอะไรเสร็จ/ไม่เสร็จ ต้อง Retry แบบไหน โดยไม่ต้องพึ่ง DLQ ของ Queue (ตามกติกา ถ้ามีทางเลือก Simple กว่า ถือว่า Not Valid)",
         },
       ];
 
