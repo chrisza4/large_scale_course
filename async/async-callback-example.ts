@@ -16,18 +16,6 @@ serverB.post("/jobs", (req, res) => {
   startWork(jobId, payload, callbackUrl);
 });
 
-async function startWork(jobId: string, payload: Payload, callbackUrl: string) {
-  await wait(2000);
-  const result = { doubled: payload.value * 2 };
-  console.log(`[Server B] job ${jobId} finished, calling back:`, result);
-
-  await fetch(callbackUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jobId, status: "completed", result }),
-  });
-}
-
 serverB.listen(PORT_B, () => {
   console.log(`[Server B] listening on http://localhost:${PORT_B}`);
 });
@@ -68,4 +56,16 @@ type Payload = {
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function startWork(jobId: string, payload: Payload, callbackUrl: string) {
+  await wait(2000);
+  const result = { doubled: payload.value * 2 };
+  console.log(`[Server B] job ${jobId} finished, calling back:`, result);
+
+  await fetch(callbackUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId, status: "completed", result }),
+  });
 }
