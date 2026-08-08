@@ -1,0 +1,68 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.subtitle {
+  color: #666;
+  margin-top: -0.5rem;
+}
+
+form {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 2rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 1rem;
+  font-size: 0.85rem;
+  color: white;
+}
+
+.badge-submitted, .badge-accepted, .badge-unknown {
+  background: #888;
+}
+
+.badge-processing {
+  background: #2563eb;
+}
+
+.badge-retrying {
+  background: #d97706;
+}
+
+.badge-completed {
+  background: #16a34a;
+}
+
+.badge-failed {
+  background: #dc2626;
+}
+
+#eventLog {
+  background: #111;
+  color: #ddd;
+  padding: 1rem;
+  height: 200px;
+  overflow-y: auto;
+  font-size: 0.8rem;
+  border-radius: 0.5rem;
+}

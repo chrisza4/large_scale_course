@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Async Payment Visualization</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <h1>Resilient Async Payment Prototype</h1>
+    <p class="subtitle">
+      Browser submits directly to System A. This page watches live events over WebSocket from the Hub.
+    </p>
+
+    <form id="paymentForm">
+      <label>
+        Amount
+        <input type="number" id="amountInput" value="100" min="1" required />
+      </label>
+      <button type="submit">Submit Payment</button>
+    </form>
+
+    <table id="jobsTable">
+      <thead>
+        <tr>
+          <th>Job ID</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Attempt</th>
+          <th>Last Update</th>
+        </tr>
+      </thead>
+      <tbody id="jobsBody"></tbody>
+    </table>
+
+    <h2>Event Log</h2>
+    <pre id="eventLog"></pre>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

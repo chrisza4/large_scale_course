@@ -3,6 +3,9 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "visualize": "bun visualized/hub.ts & bun visualized/system-b.ts & bun visualized/system-a.ts & wait"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/express": "^5.0.6"
