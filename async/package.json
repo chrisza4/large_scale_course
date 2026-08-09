@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "visualize": "bun visualized/hub.ts & bun visualized/system-b.ts & bun visualized/system-a.ts & wait"
+    "visualize": "bun visualized/hub.ts & bun visualized/system-b.ts & bun visualized/system-a.ts & wait",
+    "visualize:bullmq": "bun visualized/hub.ts & bun bullMq/system-b-bullmq.ts & bun visualized/system-a.ts & wait"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -14,6 +15,10 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "@bull-board/api": "^8.6.0",
+    "@bull-board/express": "^8.6.0",
+    "bullmq": "^6.0.9",
+    "express": "^5.2.1",
+    "ioredis": "^6.0.0"
   }
 }

@@ -8,7 +8,7 @@ export const PORT_HUB = 3002;
 export const MAX_ATTEMPTS = 4; // 1 initial try + up to 3 retries
 export const RETRY_DELAY_MS = 3000; // fixed delay between retries
 export const POLL_INTERVAL_MS = 1000; // how often System B's worker checks for due jobs
-export const MOCK_WORK_MS = 800; // simulated processing time per attempt
+export const MOCK_WORK_MS = 10000; // simulated processing time per attempt
 export const FAILURE_PROBABILITY = 0.5; // chance a single attempt fails
 
 export const SQLITE_PATH = "visualized/jobs.sqlite";
