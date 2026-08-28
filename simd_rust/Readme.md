@@ -14,14 +14,6 @@ make run-compiler-optimized
 
 ## Running simple_concurrent
 
-Run without compiler SIMD optimization:
-
-```bash
-make run-simple-concurrent-unoptimized
-```
-
-Run with release optimizations:
-
 ```bash
 make run-simple-concurrent
 ```
