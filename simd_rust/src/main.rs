@@ -8,6 +8,9 @@ const N: usize = 1024 * 1024 * 4; // 4M elements (camust be multiple of 4)
 const ITERATIONS: usize = 10;
 const NUM_TASKS: usize = 8;
 
+// Task: 2 big array, a and b
+// a[i] + b[i]
+
 fn scalar_add(a: &[f32], b: &[f32], result: &mut [f32]) {
     for i in 0..a.len() {
         result[i] = a[i] + b[i];

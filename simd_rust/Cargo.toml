@@ -2,6 +2,7 @@
 name = "simd_rust"
 version = "0.1.0"
 edition = "2024"
+default-run = "simd_rust"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }

@@ -2,7 +2,6 @@
 
 Educational prototype demonstrating resilient async communication between a
 producer (System A) and a consumer (System B), with a live visualization UI.
-See `spec.md` for the original requirements.
 
 ## Running
 

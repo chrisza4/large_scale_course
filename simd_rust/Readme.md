@@ -2,12 +2,26 @@
 
 Comparison between using simd instruction and normal instruction
 
-```
-cargo run --profile release-unoptimized
+```bash
+make run
 ```
 
 But if we go with release, compiler will optimized for SIMD automatically
 
+```bash
+make run-compiler-optimized
 ```
-cargo run --release
+
+## Running scalar_add only
+
+Run without compiler SIMD optimization:
+
+```bash
+make run-scalar-unoptimized
+```
+
+Run with release optimizations:
+
+```bash
+make run-scalar
 ```
