@@ -21,9 +21,6 @@ unsafe fn simd_add_chunk(a: &[f32], b: &[f32], result: &mut [f32]) {
         let offset = i * 16;
         unsafe {
             asm!(
-                // Prefetch 512 bytes ahead to hide memory latency
-                "prfm pldl1keep, [{pa}, #512]",
-                "prfm pldl1keep, [{pb}, #512]",
                 // Load 16 floats from a and b (4 registers × 4 floats = 64 bytes each)
                 "ld1.4s {{v0, v1, v2, v3}}, [{pa}]",
                 "ld1.4s {{v4, v5, v6, v7}}, [{pb}]",
