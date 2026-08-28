@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Race Condition — Concurrent State Simulation</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #f0f4f8;
+    --surface:     #ffffff;
+    --surface-sub: #f8fafc;
+    --border:      #e2e8f0;
+    --border-sub:  #cbd5e1;
+    --primary:     #2563eb;
+    --primary-h:   #1d4ed8;
+    --primary-bg:  #eff6ff;
+    --thread-a:    #1d4ed8;
+    --thread-a-bg: #eff6ff;
+    --thread-a-bdr:#93c5fd;
+    --thread-b:    #6366f1;
+    --thread-b-bg: #eef2ff;
+    --thread-b-bdr:#a5b4fc;
+    --green:       #059669;
+    --green-bg:    #ecfdf5;
+    --green-bdr:   #a7f3d0;
+    --red:         #dc2626;
+    --red-bg:      #fef2f2;
+    --red-bdr:     #fecaca;
+    --text:        #0f172a;
+    --text-sub:    #334155;
+    --muted:       #64748b;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2.5rem 1rem 4rem;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+  header h1 {
+    font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: #1e3a8a;
+  }
+  header p {
+    margin-top: .4rem;
+    color: var(--muted);
+    font-size: .88rem;
+    font-weight: 500;
+    letter-spacing: .02em;
+  }
+
+  /* ── Scenario Card ── */
+  .scenario-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem 1.5rem;
+    max-width: 760px;
+    width: 100%;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  }
+  .scenario-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .6rem;
+    margin-bottom: .6rem;
+    flex-wrap: wrap;
+  }
+  .scenario-badge {
+    display: inline-block;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: .2rem .55rem;
+    border-radius: 6px;
+  }
+  .scenario-title {
+    font-size: .92rem;
+    font-weight: 700;
+    color: #1e293b;
+    flex: 1;
+  }
+  .scenario-text {
+    font-size: .84rem;
+    line-height: 1.6;
+    color: var(--text-sub);
+  }
+
+  /* ── Mode Switcher Nav ── */
+  .mode-nav {
+    display: flex;
+    gap: .5rem;
+    max-width: 760px;
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+  .mode-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: .75rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--muted);
+    transition: all .2s;
+  }
+  .mode-tab:hover:not(.active) {
+    background: #f8fafc;
+    color: var(--text);
+  }
+  .mode-tab.active.racy {
+    background: var(--red-bg);
+    border-color: var(--red-bdr);
+    color: #b91c1c;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08);
+  }
+  .mode-tab.active.safe {
+    background: var(--green-bg);
+    border-color: var(--green-bdr);
+    color: #047857;
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08);
+  }
+  .tab-pill {
+    font-size: .68rem;
+    padding: .15rem .45rem;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .mode-tab.racy .tab-pill { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+  .mode-tab.safe .tab-pill { background: rgba(5, 150, 105, 0.12); color: #059669; }
+
+  /* ── Single Panel Container ── */
+  .panel-container {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  }
+  .panel-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+  .panel-title {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .panel-heading {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    margin-top: .15rem;
+  }
+  .panel.racy  .panel-heading { color: #b91c1c; }
+  .panel.safe  .panel-heading { color: #047857; }
+
+  .mode-desc {
+    font-size: .8rem;
+    line-height: 1.5;
+    color: var(--text-sub);
+    padding: .6rem .85rem;
+    border-radius: 8px;
+  }
+  .panel.racy .mode-desc {
+    background: var(--red-bg);
+    border: 1px solid var(--red-bdr);
+    color: #991b1b;
+  }
+  .panel.safe .mode-desc {
+    background: var(--green-bg);
+    border: 1px solid var(--green-bdr);
+    color: #065f46;
+  }
+
+  /* ── Balance display ── */
+  .balance-box {
+    background: var(--surface-sub);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+  .balance-label {
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .balance-value {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    transition: color .25s;
+  }
+  .balance-value.ok  { color: var(--green); }
+  .balance-value.bad { color: var(--red);   }
+  .balance-value.neutral { color: var(--text); }
+  .balance-diff {
+    font-size: .8rem;
+    font-weight: 600;
+    min-height: 1.2em;
+    transition: opacity .3s;
+  }
+  .balance-diff.hidden { opacity: 0; }
+  .balance-diff.loss   { color: var(--red);   }
+  .balance-diff.gain   { color: var(--green); }
+
+  /* ── Thread visualizer ── */
+  .threads { display: flex; flex-direction: column; gap: .75rem; }
+  .thread-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+  }
+  .thread-tag {
+    font-size: .68rem;
+    font-weight: 700;
+    padding: .3rem .55rem;
+    border-radius: 6px;
+    letter-spacing: .04em;
+    flex-shrink: 0;
+    width: 4.6rem;
+    text-align: center;
+  }
+  .thread-row.a .thread-tag {
+    background: var(--thread-a-bg);
+    color: var(--thread-a);
+    border: 1px solid var(--thread-a-bdr);
+  }
+  .thread-row.b .thread-tag {
+    background: var(--thread-b-bg);
+    color: var(--thread-b);
+    border: 1px solid var(--thread-b-bdr);
+  }
+
+  .steps { display: flex; gap: .4rem; flex: 1; }
+  .step {
+    flex: 1;
+    padding: .4rem .2rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    text-align: center;
+    font-size: .65rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-sub);
+    transition: all .2s;
+    cursor: default;
+    user-select: none;
+  }
+  .step.active-a {
+    border-color: var(--thread-a);
+    background: var(--thread-a-bg);
+    color: var(--thread-a);
+    box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.15);
+  }
+  .step.active-b {
+    border-color: var(--thread-b);
+    background: var(--thread-b-bg);
+    color: var(--thread-b);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  }
+  .step.done-a {
+    border-color: var(--thread-a-bdr);
+    color: var(--thread-a);
+    background: #f8fbff;
+    opacity: 0.7;
+  }
+  .step.done-b {
+    border-color: var(--thread-b-bdr);
+    color: var(--thread-b);
+    background: #faf8ff;
+    opacity: 0.7;
+  }
+  .step.conflict {
+    border-color: var(--red);
+    background: var(--red-bg);
+    color: var(--red);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+    animation: pulse-red .4s ease-in-out 3;
+  }
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2); }
+    50%      { box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.4); }
+  }
+
+  /* ── Log ── */
+  .log {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: .75rem .9rem;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: .68rem;
+    line-height: 1.7;
+    min-height: 6rem;
+    max-height: 6rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+  .log .entry { display: flex; gap: .5rem; }
+  .log .ts  { color: #64748b; flex-shrink: 0; }
+  .log .msg-a { color: #60a5fa; }
+  .log .msg-b { color: #a5b4fc; }
+  .log .msg-sys { color: #fde047; }
+  .log .msg-err { color: #f87171; font-weight: bold; }
+  .log .msg-ok  { color: #4ade80; font-weight: bold; }
+
+  /* ── Stats ── */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .6rem;
+  }
+  .stat-box {
+    background: var(--surface-sub);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .65rem .85rem;
+  }
+  .stat-label {
+    font-size: .62rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .stat-value {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-top: .2rem;
+  }
+
+  /* ── Controls ── */
+  .controls {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-top: 1.25rem;
+    flex-wrap: wrap;
+  }
+  .controls-left {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: .65rem 1.4rem;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-family: inherit;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .2s, background .2s, border-color .2s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .btn-racy {
+    background: #dc2626;
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(220, 38, 38, 0.25);
+  }
+  .btn-racy:hover:not(:disabled) {
+    background: #b91c1c;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+  }
+
+  .btn-safe {
+    background: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(37, 99, 235, 0.25);
+  }
+  .btn-safe:hover:not(:disabled) {
+    background: #1d4ed8;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  }
+
+  .btn-reset {
+    background: var(--surface);
+    border: 1px solid var(--border-sub);
+    color: var(--text-sub);
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .btn-reset:hover:not(:disabled) {
+    background: var(--surface-sub);
+    color: var(--text);
+  }
+
+  .btn-switch {
+    background: var(--primary-bg);
+    border: 1px solid #bfdbfe;
+    color: var(--primary-h);
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+  }
+  .btn-switch:hover:not(:disabled) {
+    background: #dbeafe;
+    border-color: #93c5fd;
+  }
+
+  .speed-wrap {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--text-sub);
+    background: var(--surface);
+    padding: .45rem .8rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .speed-wrap input[type=range] {
+    width: 75px;
+    accent-color: var(--primary);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Race Condition Simulation</h1>
+  <p>Concurrent Shared State & Mutex Synchronization</p>
+</header>
+
+<!-- Scenario Description -->
+<div class="scenario-card">
+  <div class="scenario-header">
+    <span class="scenario-badge">Scenario</span>
+    <span class="scenario-title">Concurrent Withdrawals on Shared Bank Account</span>
+  </div>
+  <p class="scenario-text">
+    An account starts with an initial balance of <strong>$1,000</strong>. Two concurrent threads (<strong>Thread A</strong> and <strong>Thread B</strong>) each perform <strong>5 consecutive $100 withdrawals</strong> simultaneously (10 withdrawals total, expected final balance: <strong>$0</strong>).
+  </p>
+</div>
+
+<!-- Mode Switcher Tabs -->
+<div class="mode-nav">
+  <button class="mode-tab active racy" id="tab-racy" onclick="switchMode('racy')">
+    <span class="tab-pill">Mode 01</span>
+    <span>No Lock (Race Condition)</span>
+  </button>
+  <button class="mode-tab safe" id="tab-safe" onclick="switchMode('safe')">
+    <span class="tab-pill">Mode 02</span>
+    <span>Mutex Lock (Solution)</span>
+  </button>
+</div>
+
+<!-- Main Display (One Mode At Once) -->
+<div class="panel-container">
+
+  <!-- RACY PANEL -->
+  <div class="panel racy" id="panel-racy">
+    <div class="panel-top">
+      <div>
+        <div class="panel-title">Mode 01 — Problem</div>
+        <div class="panel-heading">No Lock — Racy Interleaving</div>
+      </div>
+    </div>
+
+    <div class="mode-desc">
+      Threads read stale balances simultaneously before writing, clobbering each other's updates and causing balance discrepancies.
+    </div>
+
+    <div class="balance-box">
+      <div class="balance-label">Account Balance</div>
+      <div class="balance-value neutral" id="racy-balance">$1,000</div>
+      <div class="balance-diff hidden" id="racy-diff"></div>
+    </div>
+
+    <div class="threads">
+      <div class="thread-row a">
+        <div class="thread-tag">Thread A</div>
+        <div class="steps">
+          <div class="step" id="ra-read">Read</div>
+          <div class="step" id="ra-compute">Compute</div>
+          <div class="step" id="ra-write">Write</div>
+        </div>
+      </div>
+      <div class="thread-row b">
+        <div class="thread-tag">Thread B</div>
+        <div class="steps">
+          <div class="step" id="rb-read">Read</div>
+          <div class="step" id="rb-compute">Compute</div>
+          <div class="step" id="rb-write">Write</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-label">Transfers Done</div>
+        <div class="stat-value" id="racy-count">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Money Diff</div>
+        <div class="stat-value" style="color:var(--red)" id="racy-diff-stat">$0</div>
+      </div>
+    </div>
+
+    <div class="log" id="racy-log"></div>
+  </div>
+
+  <!-- SAFE PANEL -->
+  <div class="panel safe" id="panel-safe" style="display:none">
+    <div class="panel-top">
+      <div>
+        <div class="panel-title">Mode 02 — Solution</div>
+        <div class="panel-heading">Mutex Lock — Serialized Execution</div>
+      </div>
+    </div>
+
+    <div class="mode-desc">
+      Each thread acquires a mutual exclusion lock before entering critical read-modify-write steps, ensuring safe sequential access.
+    </div>
+
+    <div class="balance-box">
+      <div class="balance-label">Account Balance</div>
+      <div class="balance-value neutral" id="safe-balance">$1,000</div>
+      <div class="balance-diff hidden" id="safe-diff"></div>
+    </div>
+
+    <div class="threads">
+      <div class="thread-row a">
+        <div class="thread-tag">Thread A</div>
+        <div class="steps">
+          <div class="step" id="sa-lock">Lock</div>
+          <div class="step" id="sa-read">Read</div>
+          <div class="step" id="sa-compute">Compute</div>
+          <div class="step" id="sa-write">Write</div>
+          <div class="step" id="sa-unlock">Unlock</div>
+        </div>
+      </div>
+      <div class="thread-row b">
+        <div class="thread-tag">Thread B</div>
+        <div class="steps">
+          <div class="step" id="sb-lock">Lock</div>
+          <div class="step" id="sb-read">Read</div>
+          <div class="step" id="sb-compute">Compute</div>
+          <div class="step" id="sb-write">Write</div>
+          <div class="step" id="sb-unlock">Unlock</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-label">Transfers Done</div>
+        <div class="stat-value" id="safe-count">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Money Diff</div>
+        <div class="stat-value" style="color:var(--green)" id="safe-diff-stat">$0</div>
+      </div>
+    </div>
+
+    <div class="log" id="safe-log"></div>
+  </div>
+
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="controls-left">
+    <button class="btn btn-racy" id="btn-run" onclick="runActive()">Run Race</button>
+    <button class="btn btn-reset" id="btn-reset" onclick="resetAll()">Reset</button>
+    <div class="speed-wrap">
+      <span>Speed</span>
+      <input type="range" id="speed" min="1" max="5" value="3">
+      <span id="speed-label">3×</span>
+    </div>
+  </div>
+
+  <button class="btn btn-switch" id="btn-switch-solution" onclick="toggleMode()">
+    <span>View Solution (Mutex Lock)</span> &rarr;
+  </button>
+</div>
+
+<script>
+// ── Mutex ──────────────────────────────────────────────
+class Mutex {
+  constructor() { this._queue = []; this._locked = false; }
+  acquire() {
+    return new Promise(res => {
+      if (!this._locked) { this._locked = true; res(); }
+      else this._queue.push(res);
+    });
+  }
+  release() {
+    if (this._queue.length) { this._queue.shift()(); }
+    else this._locked = false;
+  }
+  get locked() { return this._locked; }
+}
+
+// ── State ──────────────────────────────────────────────
+const INITIAL = 1000;
+const TRANSFER = 100;
+const ROUNDS = 5;
+
+let activeMode = 'racy';
+const state = {
+  racy: { balance: INITIAL, expected: INITIAL, count: 0 },
+  safe: { balance: INITIAL, expected: INITIAL, count: 0 },
+};
+const safeMutex = new Mutex();
+let running = false;
+
+// ── Mode Switching ─────────────────────────────────────
+function switchMode(mode) {
+  if (running) return;
+  activeMode = mode;
+
+  const racyPanel = document.getElementById('panel-racy');
+  const safePanel = document.getElementById('panel-safe');
+  const tabRacy = document.getElementById('tab-racy');
+  const tabSafe = document.getElementById('tab-safe');
+  const runBtn = document.getElementById('btn-run');
+  const switchBtn = document.getElementById('btn-switch-solution');
+
+  if (mode === 'racy') {
+    racyPanel.style.display = 'flex';
+    safePanel.style.display = 'none';
+    tabRacy.className = 'mode-tab active racy';
+    tabSafe.className = 'mode-tab safe';
+    runBtn.textContent = 'Run Race';
+    runBtn.className = 'btn btn-racy';
+    switchBtn.innerHTML = '<span>View Solution (Mutex Lock)</span> &rarr;';
+  } else {
+    racyPanel.style.display = 'none';
+    safePanel.style.display = 'flex';
+    tabRacy.className = 'mode-tab racy';
+    tabSafe.className = 'mode-tab active safe';
+    runBtn.textContent = 'Run Safe (Mutex)';
+    runBtn.className = 'btn btn-safe';
+    switchBtn.innerHTML = '&larr; <span>Back to Race Mode</span>';
+  }
+}
+
+function toggleMode() {
+  switchMode(activeMode === 'racy' ? 'safe' : 'racy');
+}
+
+function runActive() {
+  if (activeMode === 'racy') {
+    runRacy();
+  } else {
+    runSafe();
+  }
+}
+
+// ── Speed ──────────────────────────────────────────────
+const speedEl = document.getElementById('speed');
+const speedLabel = document.getElementById('speed-label');
+speedEl.addEventListener('input', () => { speedLabel.textContent = speedEl.value + '×'; });
+function getDelay(base) {
+  const factor = 6 - parseInt(speedEl.value); // 1→5x, 5→1x
+  return base * factor;
+}
+
+// ── Helpers ────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt = n => '$' + n.toLocaleString();
+
+function setStep(id, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'step ' + cls;
+}
+function clearSteps(prefix) {
+  const ids = prefix === 'r'
+    ? ['ra-read','ra-compute','ra-write','rb-read','rb-compute','rb-write']
+    : ['sa-lock','sa-read','sa-compute','sa-write','sa-unlock',
+       'sb-lock','sb-read','sb-compute','sb-write','sb-unlock'];
+  ids.forEach(id => setStep(id, ''));
+}
+
+function logEntry(logId, thread, msg, type) {
+  const log = document.getElementById(logId);
+  const row = document.createElement('div');
+  row.className = 'entry';
+  const ts = document.createElement('span');
+  ts.className = 'ts';
+  ts.textContent = new Date().toISOString().slice(14,23);
+  const m = document.createElement('span');
+  m.className = 'msg-' + (type || 'sys');
+  m.textContent = (thread ? '[' + thread + '] ' : '') + msg;
+  row.appendChild(ts); row.appendChild(m);
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+function updateBalance(side, value, expected) {
+  const el = document.getElementById(side + '-balance');
+  const diffEl = document.getElementById(side + '-diff');
+  el.textContent = fmt(value);
+  const diff = value - expected;
+  if (diff !== 0) {
+    el.className = 'balance-value bad';
+    const sign = diff > 0 ? '+' : '-';
+    diffEl.textContent = '⚠ Diff: ' + (diff > 0 ? '+' : '') + fmt(diff) + ' (expected ' + fmt(expected) + ')';
+    diffEl.className = 'balance-diff loss';
+  } else if (value < INITIAL) {
+    el.className = 'balance-value ok';
+    diffEl.textContent = '✓ Matches expected value (' + fmt(expected) + ')';
+    diffEl.className = 'balance-diff gain';
+  } else {
+    el.className = 'balance-value neutral';
+    diffEl.className = 'balance-diff hidden';
+    diffEl.textContent = '';
+  }
+  document.getElementById(side + '-count').textContent = state[side].count;
+  const diffStat = document.getElementById(side + '-diff-stat');
+  if (diffStat) {
+    diffStat.textContent = fmt(Math.abs(diff));
+  }
+}
+
+// ── Racy Transfer ──────────────────────────────────────
+async function racyTransfer(thread, label) {
+  const prefix = thread === 'a' ? 'ra' : 'rb';
+  const cls = 'active-' + thread;
+  const done = 'done-' + thread;
+
+  // READ
+  setStep(prefix + '-read', cls);
+  const readVal = state.racy.balance;
+  logEntry('racy-log', label, 'READ balance = ' + fmt(readVal), thread);
+  await sleep(getDelay(180));
+  setStep(prefix + '-read', done);
+
+  // COMPUTE (this is where interleaving happens)
+  setStep(prefix + '-compute', cls);
+  const newVal = readVal - TRANSFER;
+  logEntry('racy-log', label, 'COMPUTE new = ' + fmt(newVal), thread);
+  await sleep(getDelay(250));
+  setStep(prefix + '-compute', done);
+
+  // WRITE
+  setStep(prefix + '-write', cls);
+  const prevActual = state.racy.balance;
+  state.racy.balance = newVal;
+  state.racy.expected -= TRANSFER;
+  state.racy.count++;
+
+  const diff = state.racy.balance - state.racy.expected;
+  if (diff !== 0) {
+    // Conflict detected: stale read caused overwrite
+    setStep(prefix + '-write', 'conflict');
+    logEntry('racy-log', label,
+      'WRITE ' + fmt(newVal) + ' — CLOBBERED! (stale read clobbered balance; diff ' + (diff > 0 ? '+' : '') + fmt(diff) + ')',
+      'err');
+    await sleep(getDelay(120));
+  } else {
+    logEntry('racy-log', label, 'WRITE ' + fmt(newVal), thread);
+    await sleep(getDelay(120));
+    setStep(prefix + '-write', done);
+  }
+  updateBalance('racy', state.racy.balance, state.racy.expected);
+}
+
+// ── Safe Transfer ──────────────────────────────────────
+async function safeTransfer(thread, label) {
+  const prefix = thread === 'a' ? 'sa' : 'sb';
+  const cls = 'active-' + thread;
+  const done = 'done-' + thread;
+
+  // LOCK
+  setStep(prefix + '-lock', cls);
+  const wasLocked = safeMutex.locked;
+  if (wasLocked) logEntry('safe-log', label, 'Waiting for lock…', thread);
+  await safeMutex.acquire();
+  logEntry('safe-log', label, 'Lock acquired', thread);
+  setStep(prefix + '-lock', done);
+
+  // READ
+  setStep(prefix + '-read', cls);
+  const readVal = state.safe.balance;
+  logEntry('safe-log', label, 'READ balance = ' + fmt(readVal), thread);
+  await sleep(getDelay(180));
+  setStep(prefix + '-read', done);
+
+  // COMPUTE
+  setStep(prefix + '-compute', cls);
+  const newVal = readVal - TRANSFER;
+  logEntry('safe-log', label, 'COMPUTE new = ' + fmt(newVal), thread);
+  await sleep(getDelay(250));
+  setStep(prefix + '-compute', done);
+
+  // WRITE
+  setStep(prefix + '-write', cls);
+  state.safe.balance = newVal;
+  state.safe.expected -= TRANSFER;
+  state.safe.count++;
+  logEntry('safe-log', label, 'WRITE ' + fmt(newVal), thread);
+  await sleep(getDelay(100));
+  setStep(prefix + '-write', done);
+
+  // UNLOCK
+  setStep(prefix + '-unlock', cls);
+  safeMutex.release();
+  logEntry('safe-log', label, 'Lock released', thread);
+  await sleep(getDelay(80));
+  setStep(prefix + '-unlock', done);
+
+  updateBalance('safe', state.safe.balance, state.safe.expected);
+}
+
+// ── Run Scenarios ──────────────────────────────────────
+async function runRacy() {
+  if (running) return;
+  running = true;
+  setBtns(true);
+  clearSteps('r');
+  document.getElementById('racy-log').innerHTML = '';
+  logEntry('racy-log', null, 'Starting ' + ROUNDS + ' concurrent transfer pairs…', 'sys');
+
+  for (let i = 0; i < ROUNDS; i++) {
+    await sleep(getDelay(60));
+    // Launch both threads concurrently — no await between them!
+    await Promise.all([
+      racyTransfer('a', 'Thread-A'),
+      racyTransfer('b', 'Thread-B'),
+    ]);
+    await sleep(getDelay(80));
+    clearSteps('r');
+  }
+  const diff = Math.abs(state.racy.balance - state.racy.expected);
+  if (diff > 0) {
+    logEntry('racy-log', null,
+      'Done. Discrepancy of ' + fmt(diff) + ' due to race conditions! (Expected ' + fmt(state.racy.expected) + ', actual ' + fmt(state.racy.balance) + ')', 'err');
+  } else {
+    logEntry('racy-log', null, 'Done. (Got lucky this time — try again!)', 'sys');
+  }
+  running = false;
+  setBtns(false);
+}
+
+async function runSafe() {
+  if (running) return;
+  running = true;
+  setBtns(true);
+  clearSteps('s');
+  document.getElementById('safe-log').innerHTML = '';
+  logEntry('safe-log', null, 'Starting ' + ROUNDS + ' concurrent transfer pairs…', 'sys');
+
+  for (let i = 0; i < ROUNDS; i++) {
+    await sleep(getDelay(60));
+    await Promise.all([
+      safeTransfer('a', 'Thread-A'),
+      safeTransfer('b', 'Thread-B'),
+    ]);
+    await sleep(getDelay(80));
+    clearSteps('s');
+  }
+  logEntry('safe-log', null,
+    'Done. Balance is exactly ' + fmt(state.safe.balance) + ' — diff is $0 (matches expected).', 'ok');
+  running = false;
+  setBtns(false);
+}
+
+function resetAll() {
+  if (running) return;
+  state.racy = { balance: INITIAL, expected: INITIAL, count: 0 };
+  state.safe  = { balance: INITIAL, expected: INITIAL, count: 0 };
+
+  // Reset visuals
+  ['racy','safe'].forEach(s => {
+    const b = document.getElementById(s + '-balance');
+    b.textContent = fmt(INITIAL);
+    b.className = 'balance-value neutral';
+    const d = document.getElementById(s + '-diff');
+    d.className = 'balance-diff hidden';
+    d.textContent = '';
+    document.getElementById(s + '-count').textContent = '0';
+    document.getElementById(s + '-diff-stat').textContent = '$0';
+    document.getElementById(s + '-log').innerHTML = '';
+  });
+  clearSteps('r'); clearSteps('s');
+
+  // Re-create mutex
+  Object.assign(safeMutex, new Mutex());
+  safeMutex._queue = []; safeMutex._locked = false;
+}
+
+function setBtns(disabled) {
+  document.getElementById('btn-run').disabled = disabled;
+  document.getElementById('btn-reset').disabled = disabled;
+  document.getElementById('btn-switch-solution').disabled = disabled;
+  document.getElementById('tab-racy').disabled = disabled;
+  document.getElementById('tab-safe').disabled = disabled;
+}
+</script>
+</body>
+</html>
