@@ -1,4 +1,4 @@
-.PHONY: run run-unoptimized run-compiler-optimized run-scalar run-scalar-unoptimized
+.PHONY: run run-unoptimized run-compiler-optimized run-simple-concurrent run-simple-concurrent-unoptimized
 
 run-compiler-optimized:
 	cargo run --release
@@ -6,8 +6,6 @@ run-compiler-optimized:
 run:
 	cargo run --profile release-unoptimized
 
-run-scalar:
-	cargo run --bin scalar_add --release
+run-simple-concurrent:
+	cargo run --bin simple_concurrent --profile release-unoptimized
 
-run-scalar-unoptimized:
-	cargo run --bin scalar_add --profile release-unoptimized

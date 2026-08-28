@@ -12,16 +12,16 @@ But if we go with release, compiler will optimized for SIMD automatically
 make run-compiler-optimized
 ```
 
-## Running scalar_add only
+## Running simple_concurrent
 
 Run without compiler SIMD optimization:
 
 ```bash
-make run-scalar-unoptimized
+make run-simple-concurrent-unoptimized
 ```
 
 Run with release optimizations:
 
 ```bash
-make run-scalar
+make run-simple-concurrent
 ```
