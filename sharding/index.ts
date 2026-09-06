@@ -1,7 +1,11 @@
 import { SQL } from "bun";
 
-export const shardAM = new SQL("postgres://postgres:postgres@localhost:5433/sharding_demo");
-export const shardNZ = new SQL("postgres://postgres:postgres@localhost:5434/sharding_demo");
+export const shardAM = new SQL(
+  "postgres://postgres:postgres@localhost:5433/sharding_demo",
+);
+export const shardNZ = new SQL(
+  "postgres://postgres:postgres@localhost:5434/sharding_demo",
+);
 
 export async function resetDatabase() {
   await shardAM`TRUNCATE users`;
@@ -30,7 +34,9 @@ async function createUser(req: Request): Promise<Response> {
   return Response.json(user, { status: 201 });
 }
 
-async function getUserById(req: Bun.BunRequest<"/users/:id">): Promise<Response> {
+async function getUserById(
+  req: Bun.BunRequest<"/users/:id">,
+): Promise<Response> {
   const { id } = req.params;
 
   const [fromAM] = await shardAM`SELECT * FROM users WHERE id = ${id}`;
@@ -43,7 +49,7 @@ async function getUserById(req: Bun.BunRequest<"/users/:id">): Promise<Response>
 }
 
 async function getUserByIdAndCountry(
-  req: Bun.BunRequest<"/users/:id/:countryCode">
+  req: Bun.BunRequest<"/users/:id/:countryCode">,
 ): Promise<Response> {
   const { id, countryCode } = req.params;
   const shard = getShard(countryCode);
@@ -51,7 +57,7 @@ async function getUserByIdAndCountry(
   if (!user) return Response.json({ error: "not found" }, { status: 404 });
   return Response.json(user);
 }
-
+resetDatabase();
 Bun.serve({
   port: 3000,
   routes: {
