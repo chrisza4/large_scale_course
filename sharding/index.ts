@@ -34,6 +34,17 @@ async function createUser(req: Request): Promise<Response> {
   return Response.json(user, { status: 201 });
 }
 
+async function listUsers(): Promise<Response> {
+  // A collection query has no shard key, so it must be fanned out to every
+  // shard and combined before returning the response.
+  const [usersFromAM, usersFromNZ] = await Promise.all([
+    shardAM`SELECT * FROM users`,
+    shardNZ`SELECT * FROM users`,
+  ]);
+
+  return Response.json([...usersFromAM, ...usersFromNZ]);
+}
+
 async function getUserById(
   req: Bun.BunRequest<"/users/:id">,
 ): Promise<Response> {
@@ -62,6 +73,7 @@ Bun.serve({
   port: 3000,
   routes: {
     "/users": {
+      GET: listUsers,
       POST: createUser,
     },
     "/users/:id": {

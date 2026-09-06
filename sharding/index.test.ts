@@ -49,6 +49,20 @@ describe("Internal sharding mechanism", () => {
   });
 });
 
+describe("GET /users", () => {
+  test("aggregates users from all shards", async () => {
+    await createUser(ALICE);
+    await createUser(ZACK);
+
+    const res = await fetch(`${BASE}/users`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([
+      expect.objectContaining(ALICE),
+      expect.objectContaining(ZACK),
+    ]);
+  });
+});
+
 describe("GET /users/:id", () => {
   test("finds a user", async () => {
     await createUser(ALICE);
