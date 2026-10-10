@@ -35,8 +35,6 @@ async function createUser(req: Request): Promise<Response> {
 }
 
 async function listUsers(): Promise<Response> {
-  // A collection query has no shard key, so it must be fanned out to every
-  // shard and combined before returning the response.
   const [usersFromAM, usersFromNZ] = await Promise.all([
     shardAM`SELECT * FROM users`,
     shardNZ`SELECT * FROM users`,
