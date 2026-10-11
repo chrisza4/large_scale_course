@@ -38,9 +38,3 @@ console.log("\nSecond call (same input, served from cache):");
 console.time("second call");
 console.log(await memoizedFetchUser(1));
 console.timeEnd("second call");
-
-// Is memoized function read-aside or read-through?
-// Well... if I am in memoizedFetchUser, it is read aside
-// From perspective of conosle.log() in main, it is read through
-// That is why I think read-aside vs. read-through does not make much sense
-// The real design choice is - which layer would you cache this?
