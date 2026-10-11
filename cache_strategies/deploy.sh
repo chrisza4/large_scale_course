@@ -1,0 +1,1 @@
+npx wrangler pages deploy site --project-name=cache-strategies
