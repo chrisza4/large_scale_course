@@ -1,4 +1,4 @@
-<title>Cache Write Strategies</title>
+<title>Cache Sync Strategies</title>
 <style>
   @font-face {
     font-family: "Big Shoulders Display";
@@ -260,13 +260,14 @@
 
 <div class="page">
   <header>
-    <h1>Cache Write Strategies</h1>
+    <h1>Cache Sync Strategies</h1>
     <div class="legend">
       <span class="legend-item"
         ><span class="legend-swatch write"></span>การเขียนข้อมูล</span
       >
       <span class="legend-item"
-        ><span class="legend-swatch ack"></span>การยืนยัน</span
+        ><span class="legend-swatch ack"></span>การยืนยัน / การอ่านและ
+        Sync</span
       >
     </div>
   </header>
@@ -274,22 +275,40 @@
   <main class="sheet">
     <section class="panel">
       <div class="panel-head">
-        <h2>Write-around</h2>
+        <h2>write-around (sync on read)</h2>
       </div>
       <p class="desc">
-        แอปพลิเคชันเขียนข้อมูลตรงไปยังที่ Source of truth โดยข้าม Cache ไป
-        การอ่านจะอัพเดท Cache ตามหลักกลยุทธ์ฝั่ง Read
+        แอปพลิเคชันเขียนข้อมูลตรงไปยังที่ Source of truth แล้วถูกอัพเดทตอน Sync
       </p>
       <div class="diagram-wrap">
         <canvas
           class="diagram"
-          data-script="around"
+          data-script="aroundRead"
           width="1280"
           height="440"
           role="img"
-          aria-label="แผนภาพ: แอปพลิเคชันเขียนข้อมูลตรงไปยังฐานข้อมูล โดยข้ามแคช"
+          aria-label="แผนภาพ: เขียนตรงไปยัง Source of truth โดยข้ามแคช เมื่ออ่านและแคชไม่มีข้อมูลหรือหมดอายุ จะอ่านจาก Source of truth แล้วเติมแคชและส่งข้อมูลกลับ"
         ></canvas>
-        <button class="trigger" data-target="around">Try out</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>write-around (sync on demand)</h2>
+      </div>
+      <p class="desc">
+        แอปพลิเคชันเขียนข้อมูลตรงไปยัง Source of truth แล้ว Update cache
+        ให้ตรงกับ SOT เรื่อยๆ (Combine กับ Sync on read)
+      </p>
+      <div class="diagram-wrap">
+        <canvas
+          class="diagram"
+          data-script="aroundDemand"
+          width="1280"
+          height="440"
+          role="img"
+          aria-label="แผนภาพ: เขียนตรงไปยัง Source of truth โดยข้ามแคช จากนั้นงานตามรอบเวลาอ่านข้อมูลล่าสุดจาก Source of truth มาอัพเดทแคช โดยไม่ต้องรอคำสั่งอ่านจากแอปพลิเคชัน"
+        ></canvas>
       </div>
     </section>
 
@@ -310,13 +329,12 @@
           role="img"
           aria-label="แผนภาพ: แอปพลิเคชันเขียนข้อมูลไปยังแคช แคชเขียนข้อมูลไปยังฐานข้อมูล และการยืนยันจะย้อนกลับมาก็ต่อเมื่อฐานข้อมูลยืนยันแล้วเท่านั้น"
         ></canvas>
-        <button class="trigger" data-target="through">ส่งคำสั่งเขียน</button>
       </div>
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h2>Write-behind</h2>
+        <h2>write-through (flush later, aka: write-behind)</h2>
       </div>
       <p class="desc">
         การเขียนข้อมูลจะเขียนลง Cache แล้วยืนยันทันที รอไปซักพัก Cache จะ Flush
@@ -331,7 +349,6 @@
           role="img"
           aria-label="แผนภาพ: แอปพลิเคชันเขียนข้อมูลไปยังแคชและได้รับการยืนยันทันที จากนั้นแคชจะเขียนข้อมูลไปยังฐานข้อมูลในภายหลังแบบเป็นชุด"
         ></canvas>
-        <button class="trigger" data-target="behind">ส่งคำสั่งเขียน</button>
       </div>
     </section>
   </main>
@@ -353,6 +370,7 @@
       NODE_W = 110;
     var ACK_Y = 50,
       BYPASS_Y = 190;
+    var LABEL_PADDING = 12;
 
     var nodes = {
       app: { x: APP_X, y: NODE_Y, label: "APP" },
@@ -428,18 +446,79 @@
     }
 
     var SCRIPTS = {
-      around: {
-        loop: 4200,
-        idleNode: "cache",
+      aroundRead: {
+        loop: 6200,
+        labels: ["Read", "When read miss, sync", "Write (bypass cache)"],
         beats: [
           {
             type: "pulse",
             path: "bypass",
             color: "accent",
             delay: 0,
-            dur: 1500,
+            dur: 1100,
           },
-          { type: "flash", node: "db", color: "accent", delay: 1450, dur: 500 },
+          { type: "flash", node: "db", color: "accent", delay: 1050, dur: 350 },
+          {
+            type: "pulse",
+            path: "appCache",
+            color: "ack",
+            delay: 1800,
+            dur: 650,
+          },
+          {
+            type: "pulse",
+            path: "cacheDb",
+            color: "ack",
+            delay: 2450,
+            dur: 650,
+          },
+          {
+            type: "pulse",
+            path: "cacheDb",
+            reverse: true,
+            color: "ack",
+            delay: 3100,
+            dur: 650,
+          },
+          { type: "flash", node: "cache", color: "ack", delay: 3700, dur: 350 },
+          {
+            type: "pulse",
+            path: "appCache",
+            reverse: true,
+            color: "ack",
+            delay: 4050,
+            dur: 650,
+          },
+        ],
+      },
+      aroundDemand: {
+        loop: 6200,
+        labels: ["", "Periodic fetch sync", "Write → (bypass cache)"],
+        beats: [
+          {
+            type: "pulse",
+            path: "bypass",
+            color: "accent",
+            delay: 0,
+            dur: 1100,
+          },
+          { type: "flash", node: "db", color: "accent", delay: 1050, dur: 350 },
+          {
+            type: "pulse",
+            path: "cacheDb",
+            color: "ack",
+            delay: 2800,
+            dur: 800,
+          },
+          {
+            type: "pulse",
+            path: "cacheDb",
+            reverse: true,
+            color: "ack",
+            delay: 3600,
+            dur: 800,
+          },
+          { type: "flash", node: "cache", color: "ack", delay: 4350, dur: 400 },
         ],
       },
       through: {
@@ -645,9 +724,27 @@
       function render(t) {
         ctx.clearRect(0, 0, W, H);
 
-        drawStaticPath(ctx, paths.appCache);
+        if (scriptName !== "aroundDemand") drawStaticPath(ctx, paths.appCache);
         drawStaticPath(ctx, paths.cacheDb);
-        if (scriptName === "around") drawStaticPath(ctx, paths.bypass);
+        if (script.labels) {
+          drawStaticPath(ctx, paths.bypass);
+          ctx.font = "500 10px 'IBM Plex Mono', monospace";
+          ctx.fillStyle = colorVar("muted");
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(
+            script.labels[0],
+            (APP_X + CACHE_X) / 2,
+            NODE_TOP - LABEL_PADDING,
+          );
+          ctx.fillText(
+            script.labels[1],
+            (CACHE_X + DB_X) / 2,
+            NODE_TOP - LABEL_PADDING,
+          );
+          ctx.textBaseline = "top";
+          ctx.fillText(script.labels[2], (APP_X + DB_X) / 2, BYPASS_Y + 18);
+        }
         if (scriptName === "through") drawStaticPath(ctx, paths.ackFull);
         if (scriptName === "behind") drawStaticPath(ctx, paths.ackLocal);
 
@@ -676,7 +773,8 @@
               ctx.fillStyle = colorVar("muted");
               ctx.textAlign = "center";
               var midX = (paths[beat.path][0][0] + paths[beat.path][1][0]) / 2;
-              ctx.fillText(beat.label, midX, NODE_Y - NODE_H / 2 - 10);
+              ctx.textBaseline = "bottom";
+              ctx.fillText(beat.label, midX, NODE_TOP - LABEL_PADDING);
             }
           } else if (beat.type === "flash") {
             drawFlash(ctx, nodes[beat.node], local, colorVar(beat.color));
